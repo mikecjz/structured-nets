@@ -81,7 +81,7 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type = 'GRAPPA'):
     datafile = os.path.join(data_dir, case_name, 'processed', f'slice_{slice_idx}.mat')
     data = sio.loadmat(datafile)
     
-    image = data['image_slice_abs']
+    image = data['image_slice_abs'] / np.max(data['image_slice_abs'])
     SEs = data['SEs_slice_abs']
 
     if mask_type == 'GRAPPA':

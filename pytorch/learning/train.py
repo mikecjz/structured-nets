@@ -197,6 +197,22 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
             train_loss.backward()
 
             optimizer.step()
+            
+            # Save output image every 5 epochs
+            if epoch > 0 and epoch % 1 == 0 and step == 0:
+                # Move output to CPU and convert to numpy array
+                output_np = output.detach().cpu().numpy()
+                
+                # Reshape to 128x128 image
+                output_img = output_np[0].reshape(128, 128)
+                
+                # Create directory if it doesn't exist
+                os.makedirs(os.path.join(result_path, 'images'), exist_ok=True)
+                
+                # Save as PNG using PIL
+                from PIL import Image
+                img = Image.fromarray((output_img * 255).astype(np.uint8))
+                img.save(os.path.join(result_path, 'images', f'output_epoch_{epoch}.png'))
 
             # Log training every log_freq steps
             total_step = (epoch + epoch_offset)*len(dataset.train_loader) + step+1
@@ -204,6 +220,7 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 logging.debug(('Time: ', time.time() - t1))
                 t1 = time.time()
                 logging.debug(('Training step: ', total_step))
+                
 
                 log_stats('Train', 'Train', train_loss.data.item(), train_accuracy.data.item(), total_step)
 
@@ -212,6 +229,8 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
 
         for param_group in optimizer.param_groups:
             logging.debug('Current LR: ' + str(param_group['lr']))
+        
+        logging.debug(('Training loss: ', train_loss.data.item()))
 
     # Save last checkpoint
     save_path = os.path.join(checkpoint_path, 'last')

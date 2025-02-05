@@ -4,7 +4,7 @@ python pytorch/main.py \
     --name "mri_grappa" \
     --epochs 100 \
     --batch-size 1 \
-    --lr 1e-3 \
+    --lr 1e-5 \
     --optim adam \
     --data-dir /home/jc_350/fastMRI/multicoil_train \
     --dataset mri_grappa \
