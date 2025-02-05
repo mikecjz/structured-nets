@@ -3,7 +3,7 @@ import os,sys,h5py
 import scipy.io as sio
 from scipy.linalg import solve_sylvester
 import pickle as pkl
-from sklearn.preprocessing import OneHotEncoder
+# from sklearn.preprocessing import OneHotEncoder
 import torch
 from torchvision import datasets, transforms
 

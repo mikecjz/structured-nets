@@ -346,5 +346,9 @@ venv.bak/
 scripts/data/MT_CUDA/
 *.asv
 
+results/
+tensorboard/
+checkpoints/
+
 
 # End of https://www.gitignore.io/api/python

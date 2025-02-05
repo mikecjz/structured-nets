@@ -31,7 +31,7 @@ parser.add_argument("--dataset", help='Dataset')
 parser.add_argument('--transform', default='none', help='Any transform of dataset, e.g. padding')
 parser.add_argument('--train-frac', type=float, nargs='+', default=[None])
 parser.add_argument('--val-frac', type=float, default=0.15)
-parser.add_argument("--result-dir", help='Where to save results')
+parser.add_argument("--result-dir", default='results', help='Where to save results')
 parser.add_argument('--trials', type=int, default=1, help='Number of independent runs')
 parser.add_argument('--trial-id', type=int, nargs='+', help='Specify trial numbers; alternate to --trials')
 parser.add_argument('--batch-size', type=int, default=50, help='Batch size')
@@ -51,7 +51,7 @@ parser.add_argument('--data-dir', default='../../datasets/', help='Data director
 parser.add_argument('--case-name', default='', help='Case name')
 parser.add_argument('--slice-idx', default=1, help='Slice index')
 
-out_dir = os.path.dirname(pytorch_root) # Repo root
+out_dir = pytorch_root # Repo root
 
 # seed = 0
 # np.random.seed(seed)

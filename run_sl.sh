@@ -1,5 +1,5 @@
 #!/bin/bash
-
+export CUDA_VISIBLE_DEVICES=1
 python pytorch/main.py \
     --name "mri_grappa" \
     --epochs 100 \
@@ -10,5 +10,7 @@ python pytorch/main.py \
     --dataset mri_grappa \
     --case-name file_brain_AXT1_202_2020377 \
     --slice-idx 3 \
-     model SL 
+    model SL \
+    --class-type subdiagonal_corner \
+    --r 5
     
