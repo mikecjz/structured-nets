@@ -1,14 +1,14 @@
-function process_h5_file(dirname)
+function process_h5_file(case_dir)
     % get the parent directory
-    parent_dir = dirname;
+    parent_dir = case_dir;
 
-    display(['Processing file: ', dirname]);
+    display(['Processing file: ', case_dir]);
     % find the h5 file in the RAW directory
-    h5_files_list = dir(fullfile(dirname, 'RAW', '*.h5'));
+    h5_files_list = dir(fullfile(case_dir, 'RAW', '*.h5'));
     if isempty(h5_files_list)
         error('Error: no h5 file found in the RAW directory');
     end
-    file_fullpath = fullfile(dirname, 'RAW', h5_files_list(1).name);
+    file_fullpath = fullfile(case_dir, 'RAW', h5_files_list(1).name);
     info = h5info(file_fullpath);
 
     kspace = h5read(file_fullpath,'/kspace');
@@ -52,15 +52,23 @@ function process_h5_file(dirname)
     disp('Calculating sensitivity maps');
     SEs = calculate_SEs(kspace_small);
 
+    % Get the sensitivity maps in all real format
+    SEs_abs = abs(SEs);
+    sos_SEs_abs = sum(SEs_abs.^2,3); % sum over coil dimension (dim 3)
+    SEs_abs = SEs_abs./sos_SEs_abs; % ensures SEs_abs has 1 after sum of squares
+
     % save the image and the sensitivity maps by slice
     disp('Saving the image and the sensitivity maps by slice');
     processed_dir = fullfile(parent_dir, 'processed');
     mkdir(processed_dir);
     for i = 1:size(image_small,4)
-        image_slice = image_small(:,:,:,i);
-        SEs_slice = SEs(:,:,:,i);
-        image_slice = sum(image_slice.*conj(SEs_slice), 3);
-        save(fullfile(processed_dir, ['slice_', num2str(i), '.mat']), 'image_slice', 'SEs_slice');
+        image_slice = single(image_small(:,:,:,i));
+        SEs_slice = single(SEs(:,:,:,i));
+        image_slice = single(sum(image_slice.*conj(SEs_slice), 3));
+
+        SEs_slice_abs = single(SEs_abs(:,:,:,i));
+        image_slice_abs = single(abs(image_slice));
+        save(fullfile(processed_dir, ['slice_', num2str(i), '.mat']), 'image_slice', 'SEs_slice', 'image_slice_abs', 'SEs_slice_abs');
     end
     disp('Saving done');
 
