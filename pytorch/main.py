@@ -48,6 +48,8 @@ parser.add_argument('--prune-factor', type=float, default=1, help='Factor by whi
 parser.add_argument('--prune-iters', type=int, default=1, help='Number of pruning iters')
 parser.add_argument('--save-model', action='store_false', help='Whether to save best model')
 parser.add_argument('--data-dir', default='../../datasets/', help='Data directory')
+parser.add_argument('--case-name', default='', help='Case name')
+parser.add_argument('--slice-idx', default=1, help='Slice index')
 
 out_dir = os.path.dirname(pytorch_root) # Repo root
 
@@ -76,7 +78,7 @@ def save_args(args, results_dir):
 
 def mlp(args):
     for train_frac in args.train_frac:
-        dataset = DatasetLoaders(args.dataset, args.data_dir, args.val_frac, args.transform, train_frac, args.batch_size)
+        dataset = DatasetLoaders(args.dataset, args.data_dir, args.val_frac, args.transform, train_frac, args.batch_size, args.case_name, args.slice_idx)
         model = construct_model(nets[args.model], dataset.in_size, dataset.out_size, args)
 
         for lr, mom in itertools.product(args.lr, args.mom):
@@ -122,15 +124,18 @@ def mlp(args):
                     assert False, "invalid optimizer"
                 lr_scheduler = StepLR(optimizer, step_size=1, gamma=args.lr_decay)
 
-                if args.prune:
-                    # Is there a better way to enforce pruning only for unconstrained and MLP?
-                    assert model.class_type in ['unconstrained', 'u'] and args.model in ['MLP','CNN']
-                    prune.prune(dataset, model, optimizer, lr_scheduler, args.epochs, args.log_freq, log_path,
-                        checkpoint_path, result_path, args.test, args.save_model, args.prune_lr_decay, args.prune_factor,
-                        args.prune_iters)
-                else:
-                    train.train(dataset, model, optimizer, lr_scheduler, args.epochs, args.log_freq,
-                        log_path, checkpoint_path, result_path, args.test, args.save_model)
+                # if args.prune:
+                #     # Is there a better way to enforce pruning only for unconstrained and MLP?
+                #     assert model.class_type in ['unconstrained', 'u'] and args.model in ['MLP','CNN']
+                #     prune.prune(dataset, model, optimizer, lr_scheduler, args.epochs, args.log_freq, log_path,
+                #         checkpoint_path, result_path, args.test, args.save_model, args.prune_lr_decay, args.prune_factor,
+                #         args.prune_iters)
+                # else:
+                #     train.train(dataset, model, optimizer, lr_scheduler, args.epochs, args.log_freq,
+                #         log_path, checkpoint_path, result_path, args.test, args.save_model)
+                
+                train.train_MRI(dataset, model, optimizer, lr_scheduler, args.epochs, args.log_freq, log_path,
+                    checkpoint_path, result_path, epoch_offset=0)
 
 
 ## Parse
@@ -147,7 +152,7 @@ for model in descendants(ArghModel):
     model.args.__name__ = model.__name__
     model_options.append(model.args)
     nets[model.__name__] = model
-argh.add_commands(parser, model_options, namespace='model', namespace_kwargs={'dest': 'model'})
+argh.add_commands(parser, model_options, group_name='model', group_kwargs={'dest': 'model'})
 for model in ArghModel.__subclasses__():
     # Change names back
     model.args.__name__ = 'args'

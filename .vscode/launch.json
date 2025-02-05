@@ -1,0 +1,44 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "MRI GRAPPA Training",
+            "type": "debugpy",
+            "request": "launch",
+            "postDebugTask": "closeTerminal",
+            "program": "pytorch/main.py",
+            "args": [
+                // General arguments first
+                "--name", "mri_grappa",
+                "--epochs", "100",
+                "--batch-size", "1",
+                "--lr", "1e-3",
+                "--optim", "adam",
+                "--data-dir", "/home/jc_350/fastMRI/multicoil_train",
+                "--dataset", "mri_grappa",
+                "--case-name", "file_brain_AXT1_202_2020377",
+                "--slice-idx", "3",
+                // Model subcommand and its specific arguments last
+                "model","SL",
+                // "--class-type", "subdiagonal_corner",
+                // "--r", "20",
+                // "--bias", "0"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            },
+            "console": "integratedTerminal"
+        }
+    ]
+}

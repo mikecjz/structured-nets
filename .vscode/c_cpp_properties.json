@@ -1,0 +1,17 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/jc_350/.conda/envs/LDR/lib/python3.12/site-packages/torch/include/torch/csrc/api/include/torch",
+                "/home/jc_350/.conda/envs/LDR/lib/python3.12/site-packages/torch/include"
+            ],
+            "defines": [],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-clang-x64"
+        }
+    ],
+    "version": 4
+}
