@@ -3,6 +3,7 @@ import os,sys,h5py
 import scipy.io as sio
 from scipy.linalg import solve_sylvester
 import pickle as pkl
+import plotext as pltext
 # from sklearn.preprocessing import OneHotEncoder
 import torch
 from torchvision import datasets, transforms
@@ -83,6 +84,8 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type = 'GRAPPA'):
     
     image = data['image_slice_abs'] / np.max(data['image_slice_abs'])
     SEs = data['SEs_slice_abs']
+    
+    SEs = SEs[None,64,:,:] # keep the center row and retain first dimension
 
     if mask_type == 'GRAPPA':
         mask_datafile = os.path.join('scripts/data/GRAPPA_mask.mat')
@@ -90,8 +93,11 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type = 'GRAPPA'):
         
     AhAx = AhA(image, SEs, mask)
     
-    train_X = image.reshape(1, -1)
-    train_Y = AhAx.reshape(1, -1)
+    # train_X = image.reshape(1, -1)
+    # train_Y = AhAx.reshape(1, -1)
+    
+    train_X = image
+    train_Y = AhAx
     
     in_size = train_X.shape[1]
     out_size = train_Y.shape[1]
@@ -177,7 +183,7 @@ def create_MRI_data_loaders(data_dir, case_name, slice_idx):
     train_X, train_Y, in_size, out_size = get_MRI_dataset(data_dir, case_name, slice_idx)
     
     train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=1, shuffle=False)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=train_X.shape[0], shuffle=False)
     
     return train_loader, in_size, out_size
 
@@ -276,6 +282,8 @@ def AhA(x, SEs, mask):
     
     # Apply inverse FFT2 and FFT shifts
     temp = np.fft.fftshift(np.fft.ifft2(Ax, axes=(0,1)), axes=(0,1))
+    
+    temp = np.abs(temp)
     
     # Sum along the coil dimension (assumed to be axis 2)
     AhAx = np.sum(temp * SEs, axis=2)

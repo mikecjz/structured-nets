@@ -6,6 +6,7 @@ import threading
 import logging
 import pprint
 import numpy as np
+import plotext as pltext
 import torch
 from torch.optim.lr_scheduler import StepLR
 from inspect import signature
@@ -104,7 +105,7 @@ def mlp(args):
             results_dir = os.path.join(out_dir,
                                         'results',
                                         args.result_dir,
-                                        run_name + '_' + str(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
+                                        str(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")) + '_' + run_name)
             save_args(args, results_dir)
 
             trial_ids = args.trial_id if args.trial_id is not None else range(args.trials)

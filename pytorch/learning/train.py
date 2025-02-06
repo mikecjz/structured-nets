@@ -1,6 +1,8 @@
 import numpy as np
 import os, time, logging
 import pickle as pkl
+from PIL import Image
+import plotext as pltext
 import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
@@ -188,7 +190,22 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
             # Get the inputs
             batch_xs, batch_ys = data
             batch_xs, batch_ys = batch_xs.to(device), batch_ys.to(device)
-
+            
+            # Save input x and target y if first step
+            if step == 0:
+                os.makedirs(os.path.join(result_path, 'labels'), exist_ok=True)
+                x = batch_xs.detach().cpu().numpy()
+                y = batch_ys.detach().cpu().numpy()
+                
+                x = x / np.max(np.abs(x))
+                y = y / np.max(np.abs(y))
+                img = Image.fromarray((x * 255).astype(np.uint8))
+                img.save(os.path.join(result_path, 'labels', f'input.png'))
+                img = Image.fromarray((y * 255).astype(np.uint8))
+                img.save(os.path.join(result_path, 'labels', f'target.png'))
+                
+                
+                
             optimizer.zero_grad()   # Zero the gradient buffers
 
             output = net(batch_xs)
@@ -198,20 +215,21 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
 
             optimizer.step()
             
-            # Save output image every 5 epochs
-            if epoch > 0 and epoch % 1 == 0 and step == 0:
+            # Save output image every 50 epochs
+            if epoch > 0 and epoch % 50 == 0 and step == 0:
                 # Move output to CPU and convert to numpy array
                 output_np = output.detach().cpu().numpy()
                 
+                output_np = output_np / np.max(np.abs(output_np))
+                
                 # Reshape to 128x128 image
-                output_img = output_np[0].reshape(128, 128)
+                output_img = output_np.reshape(128, 128)
                 
                 # Create directory if it doesn't exist
                 os.makedirs(os.path.join(result_path, 'images'), exist_ok=True)
                 
                 # Save as PNG using PIL
-                from PIL import Image
-                img = Image.fromarray((output_img * 255).astype(np.uint8))
+                img = Image.fromarray(np.concatenate([x * 255, y * 255, output_img * 255], axis=1).astype(np.uint8))
                 img.save(os.path.join(result_path, 'images', f'output_epoch_{epoch}.png'))
 
             # Log training every log_freq steps
