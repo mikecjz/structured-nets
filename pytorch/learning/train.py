@@ -2,6 +2,7 @@ import numpy as np
 import os, time, logging
 import pickle as pkl
 from PIL import Image
+import scipy.io as sio
 import plotext as pltext
 import torch
 import torch.optim as optim
@@ -220,7 +221,13 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 # Move output to CPU and convert to numpy array
                 output_np = output.detach().cpu().numpy()
                 
-                output_np = output_np / np.max(np.abs(output_np))
+                # Save output as .mat file for MATLAB
+                os.makedirs(os.path.join(result_path, 'matlab'), exist_ok=True)
+                sio.savemat(os.path.join(result_path, 'matlab', f'output_epoch_{epoch}.mat'), 
+                           {'output': output_np})
+                
+                output_np = output_np - np.min(output_np)
+                output_np = output_np / np.max(output_np)
                 
                 # Reshape to 128x128 image
                 output_img = output_np.reshape(128, 128)
@@ -259,8 +266,8 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
     writer.export_scalars_to_json(os.path.join(log_path, "all_scalars.json"))
     writer.close()
 
-    pkl.dump(losses, open(result_path + '_losses.p', 'wb'), protocol=2)
-    pkl.dump(accuracies, open(result_path + '_accuracies.p', 'wb'), protocol=2)
+    pkl.dump(losses, open(os.path.join(result_path, 'losses.p'), 'wb'), protocol=2)
+    pkl.dump(accuracies, open(os.path.join(result_path, 'accuracies.p'), 'wb'), protocol=2)
     logging.debug('Saved losses and accuracies to: ' + result_path)
 
     return losses, accuracies

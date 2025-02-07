@@ -21,9 +21,9 @@
             "args": [
                 // General arguments first
                 "--name", "mri_grappa",
-                "--epochs", "100",
+                "--epochs", "2000",
                 "--batch-size", "128",
-                "--lr", "1e-4",
+                "--lr", "3e-3",
                 "--optim", "adam",
                 "--data-dir", "/home/jc_350/fastMRI/multicoil_train",
                 "--dataset", "mri_grappa",

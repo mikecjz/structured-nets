@@ -103,7 +103,6 @@ def mlp(args):
                 run_name += '_pf' + str(args.prune_factor)
 
             results_dir = os.path.join(out_dir,
-                                        'results',
                                         args.result_dir,
                                         str(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")) + '_' + run_name)
             save_args(args, results_dir)
@@ -112,7 +111,11 @@ def mlp(args):
             for trial_iter in trial_ids:
                 log_path = os.path.join(out_dir, 'tensorboard', args.result_dir, run_name, str(trial_iter))
                 checkpoint_path = os.path.join(out_dir, 'checkpoints', args.result_dir, run_name, str(trial_iter))
-                result_path = os.path.join(results_dir, str(trial_iter))
+                
+                if args.trials > 1:
+                    result_path = os.path.join(results_dir, str(trial_iter))
+                else:
+                    result_path = results_dir
 
                 model.reset_parameters()
                 if args.optim == 'sgd':
