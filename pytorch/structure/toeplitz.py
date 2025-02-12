@@ -34,10 +34,18 @@ def toeplitz_krylov_transpose_multiply(v, u, f=0.0):
             arg = torch.stack((torch.cos(angles), torch.sin(angles)), dim=-1)
         eta = mod[:, np.newaxis] * arg
         eta_inverse = (1.0 / mod)[:, np.newaxis] * conjugate(arg)
-        u_f = torch.ifft(eta_inverse * u[..., np.newaxis], 1)
-        v_f = torch.fft(eta * v[..., np.newaxis], 1)
-        uv_f = complex_mult(u_f[:, np.newaxis], v_f[np.newaxis])
-        uv = torch.fft(uv_f, 1)
+        
+        temp_u = eta_inverse * u[..., np.newaxis]
+        temp_u = torch.complex(temp_u[..., 0], temp_u[..., 1])
+        u_f = torch.fft.ifft(temp_u)
+        
+        temp_v = eta * v[..., np.newaxis]
+        temp_v = torch.complex(temp_v[..., 0], temp_v[..., 1])
+        v_f = torch.fft.fft(temp_v)
+        uv_f = u_f[:, np.newaxis] * v_f[np.newaxis]
+        
+        uv_temp = torch.fft.ifft(uv_f)
+        uv = torch.stack((torch.real(uv_temp), torch.imag(uv_temp)), dim=-1)
         # We only need the real part of complex_mult(eta, uv)
         return eta[..., 0] * uv[..., 0] - eta[..., 1] * uv[..., 1]
     else:
@@ -45,7 +53,7 @@ def toeplitz_krylov_transpose_multiply(v, u, f=0.0):
         v_f = torch.rfft(torch.cat((v, torch.zeros_like(v)), dim=-1), 1)
         uv_f = complex_mult(u_f[:, np.newaxis], v_f[np.newaxis])
         return torch.irfft(uv_f, 1, signal_sizes=(2 * n, ))[..., :n].flip(2)
-
+ 
 
 def toeplitz_krylov_multiply_by_autodiff(v, w, f=0.0):
     """Multiply \sum_i Krylov(Z_f, v_i) @ w_i, using Pytorch's autodiff.
@@ -92,10 +100,15 @@ def toeplitz_krylov_multiply(v, w, f=0.0):
             arg = torch.stack((torch.cos(angles), torch.sin(angles)), dim=-1)
         eta = mod[:, np.newaxis] * arg
         eta_inverse = (1.0 / mod)[:, np.newaxis] * conjugate(arg)
-        w_f = torch.fft(eta * w[..., np.newaxis], 1)
-        v_f = torch.fft(eta * v[..., np.newaxis], 1)
-        wv_sum_f = complex_mult(w_f, v_f).sum(dim=1)
-        wv_sum = torch.ifft(wv_sum_f, 1)
+        temp_w = eta * w[..., np.newaxis]
+        temp_w = torch.complex(temp_w[..., 0], temp_w[..., 1])
+        w_f = torch.fft.fft(temp_w)
+        temp_v = eta * v[..., np.newaxis]
+        temp_v = torch.complex(temp_v[..., 0], temp_v[..., 1])
+        v_f = torch.fft.fft(temp_v)
+        wv_sum_f = (w_f * v_f).sum(dim=1)
+        wv_sum_temp = torch.fft.ifft(wv_sum_f)
+        wv_sum = torch.stack((torch.real(wv_sum_temp), torch.imag(wv_sum_temp)), dim=-1)
         # We only need the real part of complex_mult(eta_inverse, wv_sum)
         return eta_inverse[..., 0] * wv_sum[..., 0] - eta_inverse[..., 1] - wv_sum[..., 1]
     else:
