@@ -226,8 +226,9 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 sio.savemat(os.path.join(result_path, 'matlab', f'output_epoch_{epoch}.mat'), 
                            {'output': output_np})
                 
-                output_np = output_np - np.min(output_np)
+                
                 output_np = output_np / np.max(output_np)
+                output_np = output_np.clip(0, 1)
                 
                 # Reshape to 128x128 image
                 output_img = output_np.reshape(128, 128)
