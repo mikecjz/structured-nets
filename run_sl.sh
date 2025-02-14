@@ -12,7 +12,8 @@ python pytorch/main.py \
     --slice-idx 3 \
     --mask-type two_times_mask \
     --mri-train-type forward \
+    --single-coil \
     model SL \
-    --class-type toeplitz_corner \
-    --r 4  
+    --class-type toeplitz_symmetric \
+    --r 2 \
     

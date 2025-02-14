@@ -55,7 +55,6 @@ parser.add_argument('--mask-type', default='GRAPPA', help='Mask type')
 parser.add_argument('--operator-type', default='circulant', help='MRI Operator type, either toeplitz or circulant')
 parser.add_argument('--mri-train-type', default='forward', help='MRI train type, either forward or inverse')
 parser.add_argument('--single-coil', action='store_true', help='Whether to use single-coil operator (no coil maps)')
-parser.add_argument('--dim', type=int, default=1, help='Dimension of operator, either 1 for 1D or 2 for 2D')
 out_dir = pytorch_root # Repo root
 
 # seed = 0
