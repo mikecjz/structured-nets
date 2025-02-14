@@ -34,25 +34,31 @@ def toeplitz_krylov_transpose_multiply(v, u, f=0.0):
             arg = torch.stack((torch.cos(angles), torch.sin(angles)), dim=-1)
         eta = mod[:, np.newaxis] * arg
         eta_inverse = (1.0 / mod)[:, np.newaxis] * conjugate(arg)
-        
-        temp_u = eta_inverse * u[..., np.newaxis]
-        temp_u = torch.complex(temp_u[..., 0], temp_u[..., 1])
-        u_f = torch.fft.ifft(temp_u)
-        
-        temp_v = eta * v[..., np.newaxis]
-        temp_v = torch.complex(temp_v[..., 0], temp_v[..., 1])
-        v_f = torch.fft.fft(temp_v)
-        uv_f = u_f[:, np.newaxis] * v_f[np.newaxis]
-        
-        uv_temp = torch.fft.ifft(uv_f)
-        uv = torch.stack((torch.real(uv_temp), torch.imag(uv_temp)), dim=-1)
+
+        u_temp = eta_inverse * u[..., np.newaxis]
+        u_temp = torch.complex(u_temp[..., 0], u_temp[..., 1])
+        u_f = torch.fft.ifft(u_temp)
+
+        v_temp = eta * v[..., np.newaxis]
+        v_temp = torch.complex(v_temp[..., 0], v_temp[..., 1])
+        v_f = torch.fft.fft(v_temp)
+
+        uv_f = u_f[:, np.newaxis]* v_f[np.newaxis]
+        uv = torch.fft.ifft(uv_f)
         # We only need the real part of complex_mult(eta, uv)
-        return eta[..., 0] * uv[..., 0] - eta[..., 1] * uv[..., 1]
+        eta_temp = torch.complex(eta[..., 0], eta[..., 1])
+        return torch.real(eta_temp * uv)
     else:
-        u_f = torch.rfft(torch.cat((u.flip(1), torch.zeros_like(u)), dim=-1), 1)
-        v_f = torch.rfft(torch.cat((v, torch.zeros_like(v)), dim=-1), 1)
-        uv_f = complex_mult(u_f[:, np.newaxis], v_f[np.newaxis])
-        return torch.irfft(uv_f, 1, signal_sizes=(2 * n, ))[..., :n].flip(2)
+        u_f_temp = torch.fft.rfft(torch.cat((u.flip(1), torch.zeros_like(u)), dim=-1))
+        u_f = torch.stack((torch.real(u_f_temp), torch.imag(u_f_temp)), dim=-1)
+
+        v_f_temp = torch.fft.rfft(torch.cat((v, torch.zeros_like(v)), dim=-1))
+        v_f = torch.stack((torch.real(v_f_temp), torch.imag(v_f_temp)), dim=-1)
+
+        uv_f_temp = complex_mult(u_f[:, np.newaxis], v_f[np.newaxis])
+        uv_f = torch.complex(uv_f_temp[..., 0], uv_f_temp[..., 1])
+
+        return torch.fft.irfft(uv_f, n =2 * n)[..., :n].flip(2)
  
 
 def toeplitz_krylov_multiply_by_autodiff(v, w, f=0.0):
@@ -107,15 +113,21 @@ def toeplitz_krylov_multiply(v, w, f=0.0):
         temp_v = torch.complex(temp_v[..., 0], temp_v[..., 1])
         v_f = torch.fft.fft(temp_v)
         wv_sum_f = (w_f * v_f).sum(dim=1)
-        wv_sum_temp = torch.fft.ifft(wv_sum_f)
-        wv_sum = torch.stack((torch.real(wv_sum_temp), torch.imag(wv_sum_temp)), dim=-1)
+        wv_sum = torch.fft.ifft(wv_sum_f)
         # We only need the real part of complex_mult(eta_inverse, wv_sum)
-        return eta_inverse[..., 0] * wv_sum[..., 0] - eta_inverse[..., 1] - wv_sum[..., 1]
+        eta_inverse_temp = torch.complex(eta_inverse[..., 0], eta_inverse[..., 1])
+        return torch.real(eta_inverse_temp * wv_sum)
     else:
-        w_f = torch.rfft(torch.cat((w, torch.zeros_like(w)), dim=-1), 1)
-        v_f = torch.rfft(torch.cat((v, torch.zeros_like(v)), dim=-1), 1)
-        wv_sum_f = complex_mult(w_f, v_f).sum(dim=1)
-        return torch.irfft(wv_sum_f, 1, signal_sizes=(2 * n, ))[..., :n]
+        w_f_temp = torch.fft.rfft(torch.cat((w, torch.zeros_like(w)), dim=-1))
+        v_f_temp = torch.fft.rfft(torch.cat((v, torch.zeros_like(v)), dim=-1))
+
+        w_f = torch.stack((torch.real(w_f_temp), torch.imag(w_f_temp)), dim=-1)
+        v_f = torch.stack((torch.real(v_f_temp), torch.imag(v_f_temp)), dim=-1)
+
+        wv_sum_f_temp = complex_mult(w_f, v_f).sum(dim=1)
+        wv_sum_f = torch.complex(wv_sum_f_temp[..., 0], wv_sum_f_temp[..., 1])
+
+        return torch.fft.irfft(wv_sum_f, n = 2 * n)[..., :n]
 
 
 def toeplitz_mult(G, H, x, cycle=True):

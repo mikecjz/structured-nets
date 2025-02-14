@@ -51,7 +51,11 @@ parser.add_argument('--save-model', action='store_false', help='Whether to save 
 parser.add_argument('--data-dir', default='../../datasets/', help='Data directory')
 parser.add_argument('--case-name', default='', help='Case name')
 parser.add_argument('--slice-idx', default=1, help='Slice index')
-
+parser.add_argument('--mask-type', default='GRAPPA', help='Mask type')
+parser.add_argument('--operator-type', default='circulant', help='MRI Operator type, either toeplitz or circulant')
+parser.add_argument('--mri-train-type', default='forward', help='MRI train type, either forward or inverse')
+parser.add_argument('--single-coil', action='store_true', help='Whether to use single-coil operator (no coil maps)')
+parser.add_argument('--dim', type=int, default=1, help='Dimension of operator, either 1 for 1D or 2 for 2D')
 out_dir = pytorch_root # Repo root
 
 # seed = 0
@@ -74,12 +78,27 @@ def save_args(args, results_dir):
     text_file.close()
 
     # Save the Namespace object
-    pkl.dump(args, open(os.path.join(results_dir, 'params.p'), "wb"))
+    pkl.dump(args, open(os.path.join(results_dir, 'params.pkl'), "wb"))
 
 
 def mlp(args):
     for train_frac in args.train_frac:
-        dataset = DatasetLoaders(args.dataset, args.data_dir, args.val_frac, args.transform, train_frac, args.batch_size, args.case_name, args.slice_idx)
+        
+        dataset = DatasetLoaders(
+            args.dataset,
+            args.data_dir,
+            args.val_frac,
+            args.transform,
+            train_frac,
+            args.batch_size,
+            args.case_name,
+            args.slice_idx,
+            args.mask_type,
+            args.mri_train_type,
+            args.single_coil,
+            args.dim
+        )
+        
         model = construct_model(nets[args.model], dataset.in_size, dataset.out_size, args)
 
         for lr, mom in itertools.product(args.lr, args.mom):

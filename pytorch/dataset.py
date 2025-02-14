@@ -77,7 +77,7 @@ def get_dataset(dataset_name, data_dir, transform):
 
     return torch.FloatTensor(train_X), torch.FloatTensor(train_Y), torch.FloatTensor(test_X), torch.FloatTensor(test_Y), in_size, out_size
 
-def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type = 'GRAPPA'):
+def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim):
     
     datafile = os.path.join(data_dir, case_name, 'processed', f'slice_{slice_idx}.mat')
     data = sio.loadmat(datafile)
@@ -85,19 +85,32 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type = 'GRAPPA'):
     image = data['image_slice_abs'] / np.max(data['image_slice_abs'])
     SEs = data['SEs_slice_abs']
     
-    SEs = SEs[None,64,:,:] # keep the center row and retain first dimension
+    if dim == 1:
+        SEs = SEs[None,64,:,:] # keep the center row and retain first dimension
 
     if mask_type == 'GRAPPA':
         mask_datafile = os.path.join('scripts/data/GRAPPA_mask.mat')
         mask = sio.loadmat(mask_datafile)['GRAPPA_mask']
         
-    AhAx = AhA(image, SEs, mask)
+    if mask_type == 'two_times_mask':
+        mask_datafile = os.path.join('scripts/data/two_times_mask.mat')
+        mask = sio.loadmat(mask_datafile)['two_times_mask']
+        
+    AhAx = AhA(image, SEs, mask, single_coil)
     
     # train_X = image.reshape(1, -1)
     # train_Y = AhAx.reshape(1, -1)
     
-    train_X = image
-    train_Y = AhAx
+    if mri_train_type == 'forward':
+        train_X = image
+        train_Y = AhAx
+    elif mri_train_type == 'inverse':
+        train_X = AhAx
+        train_Y = image
+        
+    if dim == 2:
+        train_X = torch.expand_dims(train_X, axis=0) # add batch dimension  
+        train_Y = torch.expand_dims(train_Y, axis=0) # add batch dimension 
     
     in_size = train_X.shape[1]
     out_size = train_Y.shape[1]
@@ -178,9 +191,9 @@ def create_data_loaders(dataset_name, data_dir, transform, train_fraction, val_f
 
     return train_loader, val_loader, test_loader, in_size, out_size
 
-def create_MRI_data_loaders(data_dir, case_name, slice_idx):
+def create_MRI_data_loaders(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim):
     
-    train_X, train_Y, in_size, out_size = get_MRI_dataset(data_dir, case_name, slice_idx)
+    train_X, train_Y, in_size, out_size = get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim)
     
     train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=train_X.shape[0], shuffle=False)
@@ -191,12 +204,30 @@ def create_MRI_data_loaders(data_dir, case_name, slice_idx):
 
 
 class DatasetLoaders:
-    def __init__(self, name, data_dir, val_fraction, transform=None, train_fraction=None, batch_size=50, case_name = None, slice_idx = 1):
+    def __init__(self, 
+                 name, 
+                 data_dir, 
+                 val_fraction, 
+                 transform=None, 
+                 train_fraction=None, 
+                 batch_size=50, 
+                 case_name = None, 
+                 slice_idx = 1,
+                 mask_type = 'GRAPPA',
+                 mri_train_type = 'forward',
+                 single_coil = False,
+                 dim = 1):
         if name.startswith('true'):
             # TODO: Add support for synthetic datasets back. Possibly should be split into separate class
             self.loss = utils.mse_loss
         elif name.startswith('mri'):
-            self.train_loader, self.in_size, self.out_size = create_MRI_data_loaders(data_dir, case_name, slice_idx)
+            self.train_loader, self.in_size, self.out_size = create_MRI_data_loaders(data_dir, 
+                                                                                     case_name, 
+                                                                                     slice_idx, 
+                                                                                     mask_type, 
+                                                                                     mri_train_type, 
+                                                                                     single_coil, 
+                                                                                     dim)
             self.loss = utils.mse_loss
         else:
             self.train_loader, self.val_loader, self.test_loader, self.in_size, self.out_size = create_data_loaders(name,
@@ -255,7 +286,7 @@ def augment(self, X, Y=None):
 
     return X, Y
 
-def AhA(x, SEs, mask):
+def AhA(x, SEs, mask, single_coil):
     """
     Compute A^H A x, where A is the sensitivity encoding matrix
     
@@ -273,20 +304,27 @@ def AhA(x, SEs, mask):
     numpy.ndarray
         Result of A^H A x operation
     """
-    # Element-wise multiplication of x with sensitivity encodings
-    x_SEs = np.expand_dims(x, axis=-1) * SEs
-    
+    if not single_coil:
+        # Element-wise multiplication of x with sensitivity encodings
+        x = np.expand_dims(x, axis=-1) * SEs
+        mask = np.expand_dims(mask, axis=-1)
+    else:
+        x = x
+        
     # Apply inverse FFT shifts and FFT2
-    x_shifted = np.fft.ifftshift(x_SEs, axes=(0,1))
-    Ax = np.fft.fft2(x_shifted, axes=(0,1)) * np.expand_dims(mask, axis=-1)
+    x_shifted = np.fft.ifftshift(x, axes=(0,1))
+    Ax = np.fft.fft2(x_shifted, axes=(0,1)) * mask
     
     # Apply inverse FFT2 and FFT shifts
     temp = np.fft.fftshift(np.fft.ifft2(Ax, axes=(0,1)), axes=(0,1))
     
     temp = np.abs(temp)
     
-    # Sum along the coil dimension (assumed to be axis 2)
-    AhAx = np.sum(temp * SEs, axis=2)
+    if not single_coil:
+        # Sum along the coil dimension (assumed to be axis 2)
+        AhAx = np.sum(temp * SEs, axis=2)
+    else:
+        AhAx = temp
     
     return AhAx
 

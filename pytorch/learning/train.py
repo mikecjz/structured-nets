@@ -217,7 +217,7 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
             optimizer.step()
             
             # Save output image every 50 epochs
-            if epoch > 0 and epoch % 50 == 0 and step == 0:
+            if epoch > 0 and epoch % log_freq == 0 and step == 0:
                 # Move output to CPU and convert to numpy array
                 output_np = output.detach().cpu().numpy()
                 
@@ -267,8 +267,8 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
     writer.export_scalars_to_json(os.path.join(log_path, "all_scalars.json"))
     writer.close()
 
-    pkl.dump(losses, open(os.path.join(result_path, 'losses.p'), 'wb'), protocol=2)
-    pkl.dump(accuracies, open(os.path.join(result_path, 'accuracies.p'), 'wb'), protocol=2)
+    pkl.dump(losses, open(os.path.join(result_path, 'losses.pkl'), 'wb'), protocol=2)
+    pkl.dump(accuracies, open(os.path.join(result_path, 'accuracies.pkl'), 'wb'), protocol=2)
     logging.debug('Saved losses and accuracies to: ' + result_path)
 
     return losses, accuracies

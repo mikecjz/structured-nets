@@ -2,7 +2,7 @@
 export CUDA_VISIBLE_DEVICES=1
 python pytorch/main.py \
     --name "mri_grappa" \
-    --epochs 2000 \
+    --epochs 6000 \
     --batch-size 128 \
     --lr 3e-3 \
     --optim adam \
@@ -10,7 +10,9 @@ python pytorch/main.py \
     --dataset mri_grappa \
     --case-name file_brain_AXT1_201_6002779 \
     --slice-idx 3 \
+    --mask-type two_times_mask \
+    --mri-train-type forward \
     model SL \
-    --class-type subdiagonal_corner \
-    --r 5
+    --class-type toeplitz_corner \
+    --r 4  
     

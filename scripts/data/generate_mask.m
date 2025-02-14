@@ -5,6 +5,9 @@
 GRAPPA_mask = single(zeros(128,128));
 GRAPPA_mask(:, 1:2:end) = 1;
 
+% 2x undersampling mask
+two_times_mask = GRAPPA_mask;
+
 %ACS region 20
 GRAPPA_mask(:,55:74) = 1;
 GRAPPA_mask = fftshift(GRAPPA_mask);
@@ -39,6 +42,6 @@ Circulatant_mask = fft2(abs(ifft2(fftshift(Circulatant_weights))));
 PSF_circulant = ifftshift(ifft2(Circulatant_weights));
 
 %% Save
-
+save('two_times_mask.mat', 'two_times_mask')
 save('GRAPPA_mask.mat', 'GRAPPA_mask')
 save('Circulant_mask.mat', 'Circulatant_mask')
