@@ -130,8 +130,12 @@ class LowRank(Layer):
 
     def reset_parameters(self):
         super().reset_parameters()
-        self.G = Parameter(torch.Tensor(self.r, self.layer_size))
-        self.H = Parameter(torch.Tensor(self.r, self.layer_size))
+        if self.is_complex:
+            self.G = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.complex64))
+            self.H = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.complex64))
+        else:
+            self.G = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.float32))
+            self.H = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.float32))
         # self.init_stddev = 0.01
         self.init_stddev = np.power(1. / (self.r * self.layer_size), 1/2)
         torch.nn.init.normal_(self.G, std=self.init_stddev)
@@ -163,7 +167,7 @@ class LowRankSymmetric(Layer):
         if self.is_complex:
             self.G = Parameter(torch.zeros(self.r, self.layer_size, dtype=torch.complex64))
         else:
-            self.G = Parameter(torch.Tensor(self.r, self.layer_size))
+            self.G = Parameter(torch.zeros(self.r, self.layer_size, dtype=torch.float32))
             
         # self.init_stddev = 0.01
         self.init_stddev = np.power(1. / (self.r * self.layer_size), 1/2)
@@ -192,7 +196,7 @@ class ToeplitzLike(LowRank):
         out = toep.toeplitz_mult(self.G, self.H, x, self.corner)
         return self.apply_bias(out)
     
-class ToeplitzLikeSymmetric(LowRankSymmetric):
+class ToeplitzLikeSymmetric(LowRank):
     class_type = 'toeplitz_symmetric'
     abbrev = 'ts'
     
@@ -201,7 +205,7 @@ class ToeplitzLikeSymmetric(LowRankSymmetric):
         self.corner = False
 
     def forward(self, x):
-        out = toep.toeplitz_mult_symmetric(self.G, x, dim=self.dim)
+        out = toep.toeplitz_mult_symmetric(self.G, self.H, x, dim=self.dim)
         return self.apply_bias(out)
 
 class ToeplitzLikeC(ToeplitzLike):

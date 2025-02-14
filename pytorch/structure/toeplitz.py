@@ -129,29 +129,27 @@ def toeplitz_krylov_multiply(v, w, f=0.0):
 
         return torch.fft.irfft(wv_sum_f, n = 2 * n)[..., :n]
     
-def toeplitz_transpose_multiply_fft(G, u, dim = 1):
+def toeplitz_transpose_multiply_fft(H, u, dim = 1):
     """Multiply U(v) @ w (where U is the upper-triangular Toeplitz matrix) using FFT.
     Parameters:
-        G: 1D: (rank, n) or 2D: (rank, n, n)
-        w: 1D: (batch_size, n) or 2D: (batch_size, rank, n, n)
+        H: 1D: (rank, n) or 2D: (rank, n, n)
+        u: 1D: (batch_size, n) or 2D: (batch_size, rank, n, n)
         dim: whether to perform 1D or 2D multiplication
     Returns:
         product: (batch, rank, n)
     """
-    n = G.shape[1]
+    n = H.shape[1]
     if dim == 1:
-        #conjugate G
-        G_conj = torch.conj(G)
         # zero-pad G and w to 2n
-        G_conj = torch.cat((G_conj, torch.zeros_like(G_conj)), dim=-1) # (rank, 2n)
+        H = torch.cat((H, torch.zeros_like(H)), dim=-1) # (rank, 2n)
         u = torch.cat((u, torch.zeros_like(u)), dim=-1) # (batch_size, 2n)
         
-        G_f = torch.fft.fft(G_conj) # (rank, 2n)
+        H_f = torch.fft.fft(H) # (rank, 2n)
         u_f = torch.fft.fft(u) # (batch_size, 2n)
         
 
-        circulant_product = torch.fft.ifft(G_f * u_f[:, np.newaxis])
-        return circulant_product[..., :n].real
+        circulant_product = torch.fft.ifft(H_f * u_f[:, np.newaxis])
+        return circulant_product[..., :n].abs()
     else:
         raise NotImplementedError("2D toeplitz transpose multiply not implemented")
     
@@ -180,7 +178,7 @@ def toeplitz_multiply_fft(G, w, dim = 1):
         G_f = torch.fft.fft(G_shifted)
         w_f = torch.fft.fft(w)
         circulant_product = torch.fft.ifft(G_f * w_f)
-        return circulant_product[..., :n].sum(dim=1).real
+        return circulant_product[..., :n].sum(dim=1).abs()
     else:
         raise NotImplementedError("2D toeplitz multiply not implemented")
     
@@ -200,7 +198,7 @@ def toeplitz_mult(G, H, x, cycle=True):
     transpose_out = toeplitz_krylov_transpose_multiply(H, x, f[1])
     return toeplitz_krylov_multiply(G, transpose_out, f[0])
 
-def toeplitz_mult_symmetric(G, x, dim=1, cycle=False):
+def toeplitz_mult_symmetric(G, H, x, dim=1, cycle=False):
     """Multiply \sum_i Krylov(Z_f, G_i) @ Krylov(Z_f, H_i) @ x.
     Parameters:
         G: Tensor of shape (rank, n)
@@ -213,7 +211,7 @@ def toeplitz_mult_symmetric(G, x, dim=1, cycle=False):
     if cycle:
         raise NotImplementedError("Symmetric toeplitz multiplication with cycle not implemented")
     # f = (1,-1) if cycle else (1,1)
-    transpose_out = toeplitz_transpose_multiply_fft(G, x, dim = dim)
+    transpose_out = toeplitz_transpose_multiply_fft(H, x, dim = dim)
     return toeplitz_multiply_fft(G, transpose_out, dim = dim)
 
 
