@@ -185,7 +185,7 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
 
     t1 = time.time()
 
-    for epoch in range(epochs):
+    for epoch in range(epochs+1):
         logging.debug('Starting epoch ' + str(epoch+epoch_offset))
         for step, data in enumerate(dataset.train_loader, 0):
             # Get the inputs

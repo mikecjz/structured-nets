@@ -343,7 +343,7 @@ def AhA_cartesian(x, SEs, mask, single_coil, is_complex):
     
     return AhAx
 
-def AhA_toeplitz(x, SEs, mask, single_coil, is_complex):
+def AhA_toeplitz(x, SEs, mask, single_coil, is_complex, lam = 3):
     """
     Compute Non Cartesian (Toeplitz) A^H A x, where A is the sensitivity encoding matrix
     
@@ -363,6 +363,7 @@ def AhA_toeplitz(x, SEs, mask, single_coil, is_complex):
     """
     
     n = x.shape[0]
+    x_orig = x
     if not single_coil:
         # Element-wise multiplication of x with sensitivity encodings
         x = np.expand_dims(x, axis=-1) * SEs
@@ -374,7 +375,6 @@ def AhA_toeplitz(x, SEs, mask, single_coil, is_complex):
         x = x_padded
         
     else:
-        x = x
         x_padded = np.zeros((2*n, 2*n), dtype=x.dtype)
         x_padded[n//2:n//2+n, n//2:n//2+n] = x
         x = x_padded
@@ -402,5 +402,5 @@ def AhA_toeplitz(x, SEs, mask, single_coil, is_complex):
     else:
         AhAx = temp
     
-    return AhAx
+    return AhAx + lam * x_orig
 
