@@ -198,6 +198,10 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 x = batch_xs.detach().cpu().numpy()
                 y = batch_ys.detach().cpu().numpy()
                 
+                #squeeze
+                x = np.squeeze(x)
+                y = np.squeeze(y)
+                
                 x = np.abs(x) / np.max(np.abs(x))
                 y = np.abs(y) / np.max(np.abs(y))
                 img = Image.fromarray((x * 255).astype(np.uint8))
@@ -220,6 +224,9 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
             if epoch > 0 and epoch % log_freq == 0 and step == 0:
                 # Move output to CPU and convert to numpy array
                 output_np = output.detach().cpu().numpy()
+                
+                #squeeze
+                output_np = np.squeeze(output_np)
                 
                 # Save output as .mat file for MATLAB
                 os.makedirs(os.path.join(result_path, 'matlab'), exist_ok=True)

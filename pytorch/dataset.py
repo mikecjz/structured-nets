@@ -104,6 +104,10 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, s
         mask_datafile = os.path.join('scripts/data/two_times_mask.mat')
         mask = sio.loadmat(mask_datafile)['two_times_mask']
         
+    if mask_type == 'four_times_mask':
+        mask_datafile = os.path.join('scripts/data/four_times_mask.mat')
+        mask = sio.loadmat(mask_datafile)['four_times_mask']
+        
     AhAx = AhA(image, SEs, mask, single_coil, is_complex)
     
     # train_X = image.reshape(1, -1)

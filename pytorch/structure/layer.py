@@ -131,13 +131,24 @@ class LowRank(Layer):
     def reset_parameters(self):
         super().reset_parameters()
         if self.is_complex:
-            self.G = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.complex64))
-            self.H = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.complex64))
+            if self.dim == 1:
+                self.G = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.complex64))
+                self.H = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.complex64))
+            else:
+                self.G = Parameter(torch.Tensor(self.r, self.layer_size, self.layer_size).to(dtype=torch.complex64))
+                self.H = Parameter(torch.Tensor(self.r, self.layer_size, self.layer_size).to(dtype=torch.complex64))
         else:
-            self.G = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.float32))
-            self.H = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.float32))
+            if self.dim == 1:
+                self.G = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.float32))
+                self.H = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.float32))
+            else:
+                self.G = Parameter(torch.Tensor(self.r, self.layer_size, self.layer_size).to(dtype=torch.float32))
+                self.H = Parameter(torch.Tensor(self.r, self.layer_size, self.layer_size).to(dtype=torch.float32))
         # self.init_stddev = 0.01
-        self.init_stddev = np.power(1. / (self.r * self.layer_size), 1/2)
+        if self.dim == 1:
+            self.init_stddev = np.power(1. / (self.r * self.layer_size), 1/2)
+        else:
+            self.init_stddev = np.power(1. / (self.r * self.layer_size * self.layer_size), 1/2)
         torch.nn.init.normal_(self.G, std=self.init_stddev)
         torch.nn.init.normal_(self.H, std=self.init_stddev)
 

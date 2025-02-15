@@ -139,8 +139,10 @@ def toeplitz_transpose_multiply_fft(H, u, dim = 1, is_complex=False):
         product: (batch, rank, n)
     """
     n = H.shape[1]
+    
+    # 1D case
     if dim == 1:
-        # zero-pad G and w to 2n
+        # zero-pad H and w to 2n
         H = torch.cat((H, torch.zeros_like(H)), dim=-1) # (rank, 2n)
         u = torch.cat((u, torch.zeros_like(u)), dim=-1) # (batch_size, 2n)
         
@@ -153,8 +155,32 @@ def toeplitz_transpose_multiply_fft(H, u, dim = 1, is_complex=False):
             return circulant_product[..., :n]
         else:
             return circulant_product[..., :n].abs()
-    else:
-        raise NotImplementedError("2D toeplitz transpose multiply not implemented")
+        
+    # 2D case
+    elif dim == 2:
+        
+        # zero-pad H and u to (2n, 2n)
+        
+        # Width to 2n
+        H = torch.cat((H, torch.zeros_like(H)), dim=-1) # (rank, n, 2n)
+        u = torch.cat((u, torch.zeros_like(u)), dim=-1) # (batch_size, n, 2n)
+        
+        # Height to 2n
+        H = torch.cat((H, torch.zeros_like(H)), dim=-2) # (rank, 2n, 2n)
+        u = torch.cat((u, torch.zeros_like(u)), dim=-2) # (batch_size, 2n, 2n)
+        
+        H_f = torch.fft.fft2(H) # (rank, 2n, 2n)
+        u_f = torch.fft.fft2(u) # (batch_size, 2n, 2n)
+        
+        circulant_product = torch.fft.ifft2(H_f * u_f[:, np.newaxis]) # (rank, 2n, 2n)
+        
+        if is_complex:
+            return circulant_product[..., :n, :n]
+        else:
+            return circulant_product[..., :n, :n].abs()
+        
+        
+        
     
 def toeplitz_multiply_fft(G, w, dim = 1, is_complex=False):
     """Multiply SUM_i L(G_i) @ w_i (where L is the lower-triangular Toeplitz matrix) using FFT.
@@ -166,10 +192,10 @@ def toeplitz_multiply_fft(G, w, dim = 1, is_complex=False):
         product: (batch, n)
     """
     n = G.shape[1]
+    
+    # 1D case
     if dim == 1:
-        
-        
-        # zero-pad v and w to 2n
+        # zero-pad G and w to 2n
         G = torch.cat((G, torch.zeros_like(G)), dim=-1) # (rank, 2n)
         w = torch.cat((w, torch.zeros_like(w)), dim=-1) # (batch_size, rank, 2n)
         
@@ -185,9 +211,36 @@ def toeplitz_multiply_fft(G, w, dim = 1, is_complex=False):
             return circulant_product[..., :n].sum(dim=1)
         else:
             return circulant_product[..., :n].sum(dim=1).abs()
-    else:
-        raise NotImplementedError("2D toeplitz multiply not implemented")
-    
+        
+    # 2D case
+    elif dim == 2:
+        
+        # zero-pad G and w to (2n, 2n)
+        G = torch.cat((G, torch.zeros_like(G)), dim=-1) # (rank, n, 2n)
+        w = torch.cat((w, torch.zeros_like(w)), dim=-1) # (batch_size, rank, n, 2n)
+        
+        G = torch.cat((G, torch.zeros_like(G)), dim=-2) # (rank, 2n, 2n)
+        w = torch.cat((w, torch.zeros_like(w)), dim=-2) # (batch_size, rank, 2n, 2n)
+        
+        # shift G
+        G_shifted = torch.zeros_like(G)
+        G_shifted[:, 0, 0:n] = G[:, 0, 0:n] # keep first row
+        G_shifted[:, 1:n, 0] = G[:, 1:n, 0] # keep first column
+        
+        G_shifted[:, n+1:, n+1:] = torch.flip(G[:, 1:n, 1:n], dims=(-1,-2)) # fill lower right corner with reverse order of G
+        
+        G_f = torch.fft.fft2(G_shifted) # (rank, 2n, 2n)
+        w_f = torch.fft.fft2(w) # (batch_size, rank, 2n, 2n)
+        
+        circulant_product = torch.fft.ifft2(G_f * w_f) # (batch_size, rank, 2n, 2n)
+        
+        if is_complex:
+            return circulant_product[..., :n, :n].sum(dim=1)
+        else:
+            return circulant_product[..., :n, :n].sum(dim=1).abs()
+        
+        
+
 
 def toeplitz_mult(G, H, x, cycle=True):
     """Multiply \sum_i Krylov(Z_f, G_i) @ Krylov(Z_f, H_i) @ x.
