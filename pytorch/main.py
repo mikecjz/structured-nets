@@ -84,19 +84,20 @@ def mlp(args):
     for train_frac in args.train_frac:
         
         dataset = DatasetLoaders(
-            args.dataset,
-            args.data_dir,
-            args.val_frac,
-            args.transform,
-            train_frac,
-            args.batch_size,
-            args.case_name,
-            args.slice_idx,
-            args.mask_type,
-            args.mri_train_type,
-            args.single_coil,
-            args.dim,
-            args.is_complex
+            name = args.dataset,
+            data_dir = args.data_dir,
+            val_fraction = args.val_frac,
+            transform = args.transform,
+            train_fraction = train_frac,
+            batch_size = args.batch_size,
+            case_name = args.case_name,
+            slice_idx = args.slice_idx,
+            mask_name = args.mask_type,
+            mri_train_type = args.mri_train_type,
+            operator_type = args.operator_type,
+            single_coil = args.single_coil,
+            dim = args.dim,
+            is_complex = args.is_complex
         )
         
         model = construct_model(nets[args.model], dataset.in_size, dataset.out_size, args)

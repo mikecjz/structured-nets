@@ -2,21 +2,22 @@
 export CUDA_VISIBLE_DEVICES=1
 python pytorch/main.py \
     --name "mri_grappa" \
-    --epochs 2000 \
+    --epochs 8000 \
     --batch-size 1 \
-    --lr 1e-4 \
+    --lr 2e-5 \
     --lr-decay 1 \
     --optim adam \
-    --log-freq 50 \
+    --log-freq 200 \
     --data-dir /home/jc_350/fastMRI/multicoil_train \
     --dataset mri_grappa \
     --case-name file_brain_AXT1_201_6002779 \
     --slice-idx 3 \
-    --mask-type four_times_mask \
+    --mask-type toep_mask \
+    --operator-type toeplitz \
     --mri-train-type inverse \
     model SL \
     --class-type toeplitz_symmetric \
-    --r 4 \
+    --r 6 \
     --is-complex \
     --dim 2
     

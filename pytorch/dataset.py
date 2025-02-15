@@ -77,7 +77,7 @@ def get_dataset(dataset_name, data_dir, transform):
 
     return torch.FloatTensor(train_X), torch.FloatTensor(train_Y), torch.FloatTensor(test_X), torch.FloatTensor(test_Y), in_size, out_size
 
-def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim, is_complex):
+def get_MRI_dataset(data_dir, case_name, slice_idx, mask_name, mri_train_type, operator_type, single_coil, dim, is_complex):
     
     datafile = os.path.join(data_dir, case_name, 'processed', f'slice_{slice_idx}.mat')
     data = sio.loadmat(datafile)
@@ -93,22 +93,14 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, s
     
     if dim == 1:
         SEs = SEs[None,64,:,:] # keep the center row and retain first dimension
-        
-        
 
-    if mask_type == 'GRAPPA':
-        mask_datafile = os.path.join('scripts/data/GRAPPA_mask.mat')
-        mask = sio.loadmat(mask_datafile)['GRAPPA_mask']
-        
-    if mask_type == 'two_times_mask':
-        mask_datafile = os.path.join('scripts/data/two_times_mask.mat')
-        mask = sio.loadmat(mask_datafile)['two_times_mask']
-        
-    if mask_type == 'four_times_mask':
-        mask_datafile = os.path.join('scripts/data/four_times_mask.mat')
-        mask = sio.loadmat(mask_datafile)['four_times_mask']
-        
-    AhAx = AhA(image, SEs, mask, single_coil, is_complex)
+    mask_file = os.path.join('scripts/data', f'{mask_name}.mat')
+    mask = sio.loadmat(mask_file)['mask']
+    
+    if operator_type == 'circulant':
+        AhAx = AhA_cartesian(image, SEs, mask, single_coil, is_complex)
+    elif operator_type == 'toeplitz':
+        AhAx = AhA_toeplitz(image, SEs, mask, single_coil, is_complex)
     
     # train_X = image.reshape(1, -1)
     # train_Y = AhAx.reshape(1, -1)
@@ -203,9 +195,9 @@ def create_data_loaders(dataset_name, data_dir, transform, train_fraction, val_f
 
     return train_loader, val_loader, test_loader, in_size, out_size
 
-def create_MRI_data_loaders(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim, is_complex):
+def create_MRI_data_loaders(data_dir, case_name, slice_idx, mask_name, mri_train_type, operator_type, single_coil, dim, is_complex):
     
-    train_X, train_Y, in_size, out_size = get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim, is_complex)
+    train_X, train_Y, in_size, out_size = get_MRI_dataset(data_dir, case_name, slice_idx, mask_name, mri_train_type, operator_type, single_coil, dim, is_complex)
     
     train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=train_X.shape[0], shuffle=False)
@@ -217,16 +209,17 @@ def create_MRI_data_loaders(data_dir, case_name, slice_idx, mask_type, mri_train
 
 class DatasetLoaders:
     def __init__(self, 
-                 name, 
-                 data_dir, 
-                 val_fraction, 
-                 transform=None, 
-                 train_fraction=None, 
-                 batch_size=50, 
+                 name = None, 
+                 data_dir = None, 
+                 val_fraction = None, 
+                 transform = None, 
+                 train_fraction = None, 
+                 batch_size = 50, 
                  case_name = None, 
                  slice_idx = 1,
-                 mask_type = 'GRAPPA',
+                 mask_name = 'GRAPPA_mask',
                  mri_train_type = 'forward',
+                 operator_type = 'circulant',
                  single_coil = False,
                  dim = 1,
                  is_complex = False):
@@ -237,8 +230,9 @@ class DatasetLoaders:
             self.train_loader, self.in_size, self.out_size = create_MRI_data_loaders(data_dir, 
                                                                                      case_name, 
                                                                                      slice_idx, 
-                                                                                     mask_type, 
-                                                                                     mri_train_type, 
+                                                                                     mask_name, 
+                                                                                     mri_train_type,
+                                                                                     operator_type,
                                                                                      single_coil, 
                                                                                      dim,
                                                                                      is_complex)
@@ -303,9 +297,9 @@ def augment(self, X, Y=None):
 
     return X, Y
 
-def AhA(x, SEs, mask, single_coil, is_complex):
+def AhA_cartesian(x, SEs, mask, single_coil, is_complex):
     """
-    Compute A^H A x, where A is the sensitivity encoding matrix
+    Compute Cartesian A^H A x, where A is the sensitivity encoding matrix
     
     Parameters:
     -----------
@@ -334,6 +328,67 @@ def AhA(x, SEs, mask, single_coil, is_complex):
     
     # Apply inverse FFT2 and FFT shifts
     temp = np.fft.fftshift(np.fft.ifft2(Ax, axes=(0,1)), axes=(0,1))
+    
+    if not is_complex:
+        temp = np.abs(temp)
+    
+    if not single_coil:
+        # Sum along the coil dimension (assumed to be axis 2)
+        if is_complex:
+            AhAx = np.sum(temp * np.conj(SEs), axis=2)
+        else:
+            AhAx = np.sum(temp * SEs, axis=2)
+    else:
+        AhAx = temp
+    
+    return AhAx
+
+def AhA_toeplitz(x, SEs, mask, single_coil, is_complex):
+    """
+    Compute Non Cartesian (Toeplitz) A^H A x, where A is the sensitivity encoding matrix
+    
+    Parameters:
+    -----------
+    x : numpy.ndarray
+        Input image
+    SEs : numpy.ndarray
+        Sensitivity encodings
+    mask : numpy.ndarray
+        K-space sampling mask
+    
+    Returns:
+    --------
+    numpy.ndarray
+        Result of A^H A x operation
+    """
+    
+    n = x.shape[0]
+    if not single_coil:
+        # Element-wise multiplication of x with sensitivity encodings
+        x = np.expand_dims(x, axis=-1) * SEs
+        mask = np.expand_dims(mask, axis=-1)
+        
+        # Zero pad x to 2n
+        x_padded = np.zeros((2*n, 2*n, x.shape[2]), dtype=x.dtype)
+        x_padded[n//2:n//2+n, n//2:n//2+n, :] = x
+        x = x_padded
+        
+    else:
+        x = x
+        x_padded = np.zeros((2*n, 2*n), dtype=x.dtype)
+        x_padded[n//2:n//2+n, n//2:n//2+n] = x
+        x = x_padded
+        
+    
+        
+    # Apply inverse FFT shifts and FFT2
+    x_shifted = np.fft.ifftshift(x, axes=(0,1))
+    Ax = np.fft.fft2(x_shifted, axes=(0,1)) * mask
+    
+    # Apply inverse FFT2 and FFT shifts
+    temp = np.fft.fftshift(np.fft.ifft2(Ax, axes=(0,1)), axes=(0,1))
+    
+    temp = temp[n//2:n//2+n, n//2:n//2+n, ...]
     
     if not is_complex:
         temp = np.abs(temp)
