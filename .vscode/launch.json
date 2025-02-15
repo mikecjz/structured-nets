@@ -33,7 +33,8 @@
                 "--mri-train-type", "forward",
                 "model", "SL",
                 "--class-type", "toeplitz_symmetric",
-                "--r", "6"
+                "--r", "6",
+                "--is-complex"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "1"

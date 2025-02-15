@@ -8,6 +8,14 @@ def mse_loss(pred, true):
 
     return mse, accuracy
 
+def mse_loss_complex(pred, true):
+    diff = pred - true
+    mse = torch.mean(torch.abs(diff))
+    accuracy = torch.FloatTensor([0])
+
+    return mse, accuracy
+    
+
 def cross_entropy_loss(pred, true):
     loss_fn = nn.CrossEntropyLoss()
     _, true_argmax = torch.max(true, 1)

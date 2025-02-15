@@ -205,7 +205,7 @@ class ToeplitzLikeSymmetric(LowRank):
         self.corner = False
 
     def forward(self, x):
-        out = toep.toeplitz_mult_symmetric(self.G, self.H, x, dim=self.dim)
+        out = toep.toeplitz_mult_symmetric(self.G, self.H, x, dim=self.dim, is_complex=self.is_complex)
         return self.apply_bias(out)
 
 class ToeplitzLikeC(ToeplitzLike):

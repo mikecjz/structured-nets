@@ -77,16 +77,24 @@ def get_dataset(dataset_name, data_dir, transform):
 
     return torch.FloatTensor(train_X), torch.FloatTensor(train_Y), torch.FloatTensor(test_X), torch.FloatTensor(test_Y), in_size, out_size
 
-def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim):
+def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim, is_complex):
     
     datafile = os.path.join(data_dir, case_name, 'processed', f'slice_{slice_idx}.mat')
     data = sio.loadmat(datafile)
-    
-    image = data['image_slice_abs'] / np.max(data['image_slice_abs'])
-    SEs = data['SEs_slice_abs']
+    if is_complex:
+        image = data['image_slice']
+        SEs = data['SEs_slice']
+        image = image / np.max(np.abs(image))
+        data_type = torch.complex64
+    else:
+        image = data['image_slice_abs'] / np.max(data['image_slice_abs'])
+        SEs = data['SEs_slice_abs']
+        data_type = torch.float32
     
     if dim == 1:
         SEs = SEs[None,64,:,:] # keep the center row and retain first dimension
+        
+        
 
     if mask_type == 'GRAPPA':
         mask_datafile = os.path.join('scripts/data/GRAPPA_mask.mat')
@@ -96,7 +104,7 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, s
         mask_datafile = os.path.join('scripts/data/two_times_mask.mat')
         mask = sio.loadmat(mask_datafile)['two_times_mask']
         
-    AhAx = AhA(image, SEs, mask, single_coil)
+    AhAx = AhA(image, SEs, mask, single_coil, is_complex)
     
     # train_X = image.reshape(1, -1)
     # train_Y = AhAx.reshape(1, -1)
@@ -109,8 +117,8 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, s
         train_Y = image
         
     if dim == 2:
-        train_X = torch.expand_dims(train_X, axis=0) # add batch dimension  
-        train_Y = torch.expand_dims(train_Y, axis=0) # add batch dimension 
+        train_X = np.expand_dims(train_X, axis=0) # add batch dimension  
+        train_Y = np.expand_dims(train_Y, axis=0) # add batch dimension 
     
     in_size = train_X.shape[1]
     out_size = train_Y.shape[1]
@@ -119,7 +127,7 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, s
     print("In size: ", in_size)
     print("Out size: ", out_size)
     
-    return torch.FloatTensor(train_X), torch.FloatTensor(train_Y), in_size, out_size
+    return torch.from_numpy(train_X), torch.from_numpy(train_Y), in_size, out_size
 
 
 
@@ -191,9 +199,9 @@ def create_data_loaders(dataset_name, data_dir, transform, train_fraction, val_f
 
     return train_loader, val_loader, test_loader, in_size, out_size
 
-def create_MRI_data_loaders(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim):
+def create_MRI_data_loaders(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim, is_complex):
     
-    train_X, train_Y, in_size, out_size = get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim)
+    train_X, train_Y, in_size, out_size = get_MRI_dataset(data_dir, case_name, slice_idx, mask_type, mri_train_type, single_coil, dim, is_complex)
     
     train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=train_X.shape[0], shuffle=False)
@@ -216,7 +224,8 @@ class DatasetLoaders:
                  mask_type = 'GRAPPA',
                  mri_train_type = 'forward',
                  single_coil = False,
-                 dim = 1):
+                 dim = 1,
+                 is_complex = False):
         if name.startswith('true'):
             # TODO: Add support for synthetic datasets back. Possibly should be split into separate class
             self.loss = utils.mse_loss
@@ -227,8 +236,12 @@ class DatasetLoaders:
                                                                                      mask_type, 
                                                                                      mri_train_type, 
                                                                                      single_coil, 
-                                                                                     dim)
-            self.loss = utils.mse_loss
+                                                                                     dim,
+                                                                                     is_complex)
+            if is_complex:
+                self.loss = utils.mse_loss_complex
+            else:
+                self.loss = utils.mse_loss
         else:
             self.train_loader, self.val_loader, self.test_loader, self.in_size, self.out_size = create_data_loaders(name,
                 data_dir, transform, train_fraction, val_fraction, batch_size)
@@ -286,7 +299,7 @@ def augment(self, X, Y=None):
 
     return X, Y
 
-def AhA(x, SEs, mask, single_coil):
+def AhA(x, SEs, mask, single_coil, is_complex):
     """
     Compute A^H A x, where A is the sensitivity encoding matrix
     
@@ -318,11 +331,15 @@ def AhA(x, SEs, mask, single_coil):
     # Apply inverse FFT2 and FFT shifts
     temp = np.fft.fftshift(np.fft.ifft2(Ax, axes=(0,1)), axes=(0,1))
     
-    temp = np.abs(temp)
+    if not is_complex:
+        temp = np.abs(temp)
     
     if not single_coil:
         # Sum along the coil dimension (assumed to be axis 2)
-        AhAx = np.sum(temp * SEs, axis=2)
+        if is_complex:
+            AhAx = np.sum(temp * np.conj(SEs), axis=2)
+        else:
+            AhAx = np.sum(temp * SEs, axis=2)
     else:
         AhAx = temp
     

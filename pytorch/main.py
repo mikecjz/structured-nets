@@ -95,7 +95,8 @@ def mlp(args):
             args.mask_type,
             args.mri_train_type,
             args.single_coil,
-            args.dim
+            args.dim,
+            args.is_complex
         )
         
         model = construct_model(nets[args.model], dataset.in_size, dataset.out_size, args)

@@ -198,8 +198,8 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 x = batch_xs.detach().cpu().numpy()
                 y = batch_ys.detach().cpu().numpy()
                 
-                x = x / np.max(np.abs(x))
-                y = y / np.max(np.abs(y))
+                x = np.abs(x) / np.max(np.abs(x))
+                y = np.abs(y) / np.max(np.abs(y))
                 img = Image.fromarray((x * 255).astype(np.uint8))
                 img.save(os.path.join(result_path, 'labels', f'input.png'))
                 img = Image.fromarray((y * 255).astype(np.uint8))
@@ -227,7 +227,7 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                            {'output': output_np})
                 
                 
-                output_np = output_np / np.max(output_np)
+                output_np = np.abs(output_np) / np.max(np.abs(output_np))
                 output_np = output_np.clip(0, 1)
                 
                 # Reshape to 128x128 image
