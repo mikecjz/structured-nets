@@ -1,7 +1,7 @@
 #!/bin/bash
 export CUDA_VISIBLE_DEVICES=1
 python pytorch/main.py \
-    --name "mri_2x" \
+    --name "mri_4x" \
     --epochs 4000 \
     --batch-size 1 \
     --lr 8e-5 \
