@@ -2,12 +2,12 @@
 export CUDA_VISIBLE_DEVICES=1
 python pytorch/main.py \
     --name "mri_4x" \
-    --epochs 4000 \
+    --epochs 2000 \
     --batch-size 1 \
     --lr 8e-5 \
     --lr-decay 0.99995 \
     --optim ams \
-    --log-freq 200 \
+    --log-freq 10 \
     --data-dir /home/jc_350/fastMRI/multicoil_train \
     --dataset mri_4x \
     --case-name file_brain_AXT1_201_6002779 \

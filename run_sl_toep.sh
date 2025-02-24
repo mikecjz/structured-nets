@@ -2,12 +2,12 @@
 export CUDA_VISIBLE_DEVICES=1
 python pytorch/main.py \
     --name "mri_toep" \
-    --epochs 18000 \
+    --epochs 24000 \
     --batch-size 1 \
     --lr 3e-5 \
     --lr-decay 0.99995 \
     --optim ams \
-    --log-freq 500 \
+    --log-freq 1000 \
     --data-dir /home/jc_350/fastMRI/multicoil_train \
     --dataset mri_toep \
     --case-name file_brain_AXT1_201_6002779 \

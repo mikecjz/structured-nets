@@ -61,9 +61,13 @@ function process_h5_file(case_dir)
     disp('Saving the image and the sensitivity maps by slice');
     processed_dir = fullfile(parent_dir, 'processed');
     mkdir(processed_dir);
+    mkdir(fullfile(processed_dir, 'images'));
     for i = 1:size(image_small,4)
         image_slice = single(image_small(:,:,:,i));
         SEs_slice = single(SEs(:,:,:,i));
+
+        save_coil_images(image_slice, SEs_slice, i, fullfile(processed_dir, 'images'));
+
         image_slice = single(sum(image_slice.*conj(SEs_slice), 3));
 
         SEs_slice_abs = single(SEs_abs(:,:,:,i));
@@ -84,4 +88,16 @@ function SEs = calculate_SEs(kspace_small)
         [~] = evalc('[SEs_slice, ~] = bart(''ecalib -m 1 -c 0 -r 24'', kspace_slice);');
         SEs(:,:,:,i) = SEs_slice;
     end
+end
+
+function save_coil_images(image_small_slice, SEs_slice, slice_idx, processed_dir)
+    % create tiled image from image_small_slice
+    image_tile = imtile(abs(image_small_slice)./max(abs(image_small_slice(:))));
+    % save the tiled image
+    imwrite(image_tile, fullfile(processed_dir, ['slice_', num2str(slice_idx), '_coil_images.png']));
+
+    % create tiled image from SEs_slice
+    SEs_tile = imtile(abs(SEs_slice)./max(abs(SEs_slice(:))));
+    % save the tiled image
+    imwrite(SEs_tile, fullfile(processed_dir, ['slice_', num2str(slice_idx), '_coil_SEs.png']));
 end

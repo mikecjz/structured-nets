@@ -8,6 +8,7 @@ import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 from tensorboardX import SummaryWriter
+from tqdm import tqdm
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -181,12 +182,14 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
         accuracies[split].append(acc)
         writer.add_scalar(split+'/Loss', loss, step)
         writer.add_scalar(split+'/Accuracy', acc, step)
-        logging.debug(f"{name} loss, accuracy: {loss:.6f}, {acc:.6f}")
+        # logging.debug(f"{name} loss, accuracy: {loss:.6f}, {acc:.6f}")
 
     t1 = time.time()
 
-    for epoch in range(epochs+1):
-        logging.debug('Starting epoch ' + str(epoch+epoch_offset))
+    # Create progress bar for epochs
+    pbar = tqdm(range(epochs+1), disable=None)
+    for epoch in pbar:
+            
         for step, data in enumerate(dataset.train_loader, 0):
             # Get the inputs
             batch_xs, batch_ys = data
@@ -202,11 +205,11 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 x = np.squeeze(x)
                 y = np.squeeze(y)
                 
-                x = np.abs(x) / np.max(np.abs(x))
-                y = np.abs(y) / np.max(np.abs(y))
-                img = Image.fromarray((x * 255).astype(np.uint8))
+                x_scaled = np.abs(x) / np.max(np.abs(x))
+                y_scaled = np.abs(y) / np.max(np.abs(y))
+                img = Image.fromarray((x_scaled * 255).astype(np.uint8))
                 img.save(os.path.join(result_path, 'labels', f'input.png'))
-                img = Image.fromarray((y * 255).astype(np.uint8))
+                img = Image.fromarray((y_scaled * 255).astype(np.uint8))
                 img.save(os.path.join(result_path, 'labels', f'target.png'))
                 
                 
@@ -220,8 +223,8 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
 
             optimizer.step()
             
-            # Save output image every 50 epochs
-            if epoch > 0 and epoch % log_freq == 0 and step == 0:
+            # Save output image every log_freq epochs
+            if  epoch % log_freq == 0 and step == 0:
                 # Move output to CPU and convert to numpy array
                 output_np = output.detach().cpu().numpy()
                 
@@ -233,6 +236,11 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 sio.savemat(os.path.join(result_path, 'matlab', f'output_epoch_{epoch}.mat'), 
                            {'output': output_np})
                 
+                diff = np.abs(output_np - y)
+                diffx10 = np.abs(output_np - y) * 10
+                
+                diff = np.abs(diff) / np.max(np.abs(y))
+                diffx10 = np.abs(diffx10) / np.max(np.abs(y))
                 
                 output_np = np.abs(output_np) / np.max(np.abs(output_np))
                 output_np = output_np.clip(0, 1)
@@ -244,26 +252,20 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 os.makedirs(os.path.join(result_path, 'images'), exist_ok=True)
                 
                 # Save as PNG using PIL
-                img = Image.fromarray(np.concatenate([x * 255, y * 255, output_img * 255], axis=1).astype(np.uint8))
+                img = Image.fromarray(np.concatenate([x_scaled * 255, y_scaled * 255, output_img * 255, diff * 255, diffx10 * 255], axis=1).astype(np.uint8))
                 img.save(os.path.join(result_path, 'images', f'output_epoch_{epoch}.png'))
 
-            # Log training every log_freq steps
+            # Log training metrics every log_freq steps
             total_step = (epoch + epoch_offset)*len(dataset.train_loader) + step+1
             if total_step % log_freq == 0:
-                logging.debug(('Time: ', time.time() - t1))
-                t1 = time.time()
-                logging.debug(('Training step: ', total_step))
-                
-
                 log_stats('Train', 'Train', train_loss.data.item(), train_accuracy.data.item(), total_step)
+                
+                # Update progress bar description with current metrics
+                current_lr = optimizer.param_groups[0]['lr']
+                pbar.set_description(f'LR: {current_lr:.2e} Loss: {train_loss.data.item():.4f}')
 
         # Update LR
         lr_scheduler.step()
-
-        for param_group in optimizer.param_groups:
-            logging.debug('Current LR: ' + str(param_group['lr']))
-        
-        logging.debug(('Training loss: ', train_loss.data.item()))
 
     # Save last checkpoint
     save_path = os.path.join(checkpoint_path, 'last')
