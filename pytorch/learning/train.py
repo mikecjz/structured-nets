@@ -208,8 +208,10 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 x_scaled = np.abs(x) / np.max(np.abs(x))
                 y_scaled = np.abs(y) / np.max(np.abs(y))
                 img = Image.fromarray((x_scaled * 255).astype(np.uint8))
+                img = img.rotate(90)  # Rotate 90 degrees counter clockwise
                 img.save(os.path.join(result_path, 'labels', f'input.png'))
                 img = Image.fromarray((y_scaled * 255).astype(np.uint8))
+                img = img.rotate(90)  # Rotate 90 degrees counter clockwise
                 img.save(os.path.join(result_path, 'labels', f'target.png'))
                 
                 
@@ -250,6 +252,14 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 
                 # Create directory if it doesn't exist
                 os.makedirs(os.path.join(result_path, 'images'), exist_ok=True)
+                
+                
+                # Rotate 90 degrees counter clockwise
+                output_img = np.rot90(output_img)
+                y_scaled = np.rot90(y_scaled)
+                x_scaled = np.rot90(x_scaled)
+                diff = np.rot90(diff)
+                diffx10 = np.rot90(diffx10)
                 
                 # Save as PNG using PIL
                 img = Image.fromarray(np.concatenate([x_scaled * 255, y_scaled * 255, output_img * 255, diff * 255, diffx10 * 255], axis=1).astype(np.uint8))

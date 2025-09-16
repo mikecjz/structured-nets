@@ -1,10 +1,25 @@
 #!/bin/bash
 export CUDA_VISIBLE_DEVICES=1
+# Default train type
+TYPE="inverse"
+
+# Parse command line arguments
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --type)
+            TYPE="$2"
+            shift 2
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 python pytorch/main.py \
     --name "mri_4x" \
-    --epochs 2000 \
+    --epochs 4000 \
     --batch-size 1 \
-    --lr 8e-5 \
+    --lr 3e-5 \
     --lr-decay 0.99995 \
     --optim ams \
     --log-freq 10 \
@@ -14,10 +29,10 @@ python pytorch/main.py \
     --slice-idx 3 \
     --mask-type four_times_mask \
     --operator-type circulant \
-    --mri-train-type inverse \
+    --mri-train-type $TYPE \
     model SL \
     --class-type toeplitz_symmetric \
-    --r 4 \
+    --r 6 \
     --is-complex \
     --dim 2
     

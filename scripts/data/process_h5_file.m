@@ -92,12 +92,12 @@ end
 
 function save_coil_images(image_small_slice, SEs_slice, slice_idx, processed_dir)
     % create tiled image from image_small_slice
-    image_tile = imtile(abs(image_small_slice)./max(abs(image_small_slice(:))));
+    image_tile = imtile(imrotate(abs(image_small_slice)./max(abs(image_small_slice(:))), 90));
     % save the tiled image
     imwrite(image_tile, fullfile(processed_dir, ['slice_', num2str(slice_idx), '_coil_images.png']));
 
     % create tiled image from SEs_slice
-    SEs_tile = imtile(abs(SEs_slice)./max(abs(SEs_slice(:))));
+    SEs_tile = imtile(imrotate(abs(SEs_slice)./max(abs(SEs_slice(:))), 90));
     % save the tiled image
     imwrite(SEs_tile, fullfile(processed_dir, ['slice_', num2str(slice_idx), '_coil_SEs.png']));
 end

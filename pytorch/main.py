@@ -104,6 +104,7 @@ def mlp(args):
 
         for lr, mom in itertools.product(args.lr, args.mom):
             run_name = args.name + '_' + model.name() \
+                    + '_' + args.mri_train_type \
                     + '_lr' + str(lr) \
                     + '_lrd' + str(args.lr_decay) \
                     + '_mom' + str(mom) \

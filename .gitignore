@@ -350,5 +350,10 @@ results/
 tensorboard/
 checkpoints/
 
+scripts/data/temp/
+scripts/data/*.png
+scripts/data/*.eps
+
+
 
 # End of https://www.gitignore.io/api/python
