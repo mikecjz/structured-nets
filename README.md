@@ -1,6 +1,5 @@
-> [!NOTE] This repo uses infrastructure provided by [Thomas et al.
-> (2019)](https://arxiv.org/abs/1810.02309), and is forked from
-> [HazyResearch/structured-nets](https://github.com/HazyResearch/structured-nets).
+> [!NOTE] 
+> This repo uses infrastructure provided by [Thomas et al. (2019)](https://arxiv.org/abs/1810.02309), and is forked from [HazyResearch/structured-nets](https://github.com/HazyResearch/structured-nets).
 
 [[Project Page]](https://junzhou.chen.engineer/LDR/)
 
@@ -21,7 +20,8 @@ conda env create -f environment.yaml -n LDR
 ```
 
 ## Running the Experiments
-> [!NOTE] Example date used in the paper is provided in the `data` directory.
+> [!NOTE]
+> Example date used in the paper is provided in the `data` directory.
 
 
 First activate the conda environment.
