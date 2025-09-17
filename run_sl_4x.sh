@@ -2,6 +2,7 @@
 export CUDA_VISIBLE_DEVICES=1
 # Default train type
 TYPE="inverse"
+DATA_DIR="data"
 
 # Parse command line arguments
 while [ "$#" -gt 0 ]; do
@@ -23,7 +24,7 @@ python pytorch/main.py \
     --lr-decay 0.99995 \
     --optim ams \
     --log-freq 10 \
-    --data-dir /home/jc_350/fastMRI/multicoil_train \
+    --data-dir $DATA_DIR \
     --dataset mri_4x \
     --case-name file_brain_AXT1_201_6002779 \
     --slice-idx 3 \
