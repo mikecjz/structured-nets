@@ -12,8 +12,13 @@ Arbitrary Trajectories" @ MICCAI 2025.
 
 This repo  contains the simulation and trainning code used in the paper that demonstrate the
 feasibility of direct inversion of the multi-coil MR operator based on the theory of low
-displacement rank (LDR). [see Kailath,
+displacement rank (LDR). [see Kailath et al.,
 1979](https://www.sciencedirect.com/science/article/pii/0022247X79901240).
+
+
+![LDR Learning Process](https://junzhou.chen.engineer/LDR/static/gifs/LDR_learning_process.gif)
+<center>Learning Process in PyTorch with LDR Operator Built with Learnable Triangular Toeplitz Operators</center>
+
 
 
 ## Installation
