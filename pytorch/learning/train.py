@@ -1,10 +1,14 @@
 import numpy as np
 import os, time, logging
 import pickle as pkl
+from PIL import Image
+import scipy.io as sio
+import plotext as pltext
 import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 from tensorboardX import SummaryWriter
+from tqdm import tqdm
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -149,6 +153,141 @@ def train(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path, che
 
     pkl.dump(losses, open(result_path + '_losses.p', 'wb'), protocol=2)
     pkl.dump(accuracies, open(result_path + '_accuracies.p', 'wb'), protocol=2)
+    logging.debug('Saved losses and accuracies to: ' + result_path)
+
+    return losses, accuracies
+
+# Epoch_offset: to ensure stats are not overwritten when called during pruning
+def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path, checkpoint_path, result_path, epoch_offset=0):
+    logging.debug('Tensorboard log path: ' + log_path)
+    logging.debug('Tensorboard checkpoint path: ' + checkpoint_path)
+    logging.debug('Results directory: ' + result_path)
+
+    os.makedirs(checkpoint_path, exist_ok=True)
+
+    writer = SummaryWriter(log_path)
+    net.to(device)
+
+    logging.debug((torch.cuda.get_device_name(0)))
+
+    for name, param in net.named_parameters():
+        if param.requires_grad:
+            logging.debug(('Parameter name, shape: ', name, param.data.shape))
+
+    losses = {'Train': [], 'DR': [], 'ratio': []}
+    accuracies = {'Train': []}
+
+    def log_stats(name, split, loss, acc, step):
+        losses[split].append(loss)
+        accuracies[split].append(acc)
+        writer.add_scalar(split+'/Loss', loss, step)
+        writer.add_scalar(split+'/Accuracy', acc, step)
+        # logging.debug(f"{name} loss, accuracy: {loss:.6f}, {acc:.6f}")
+
+    t1 = time.time()
+
+    # Create progress bar for epochs
+    pbar = tqdm(range(epochs+1), disable=None)
+    for epoch in pbar:
+            
+        for step, data in enumerate(dataset.train_loader, 0):
+            # Get the inputs
+            batch_xs, batch_ys = data
+            batch_xs, batch_ys = batch_xs.to(device), batch_ys.to(device)
+            
+            # Save input x and target y if first step
+            if step == 0:
+                os.makedirs(os.path.join(result_path, 'labels'), exist_ok=True)
+                x = batch_xs.detach().cpu().numpy()
+                y = batch_ys.detach().cpu().numpy()
+                
+                #squeeze
+                x = np.squeeze(x)
+                y = np.squeeze(y)
+                
+                x_scaled = np.abs(x) / np.max(np.abs(x))
+                y_scaled = np.abs(y) / np.max(np.abs(y))
+                img = Image.fromarray((x_scaled * 255).astype(np.uint8))
+                img = img.rotate(90)  # Rotate 90 degrees counter clockwise
+                img.save(os.path.join(result_path, 'labels', f'input.png'))
+                img = Image.fromarray((y_scaled * 255).astype(np.uint8))
+                img = img.rotate(90)  # Rotate 90 degrees counter clockwise
+                img.save(os.path.join(result_path, 'labels', f'target.png'))
+                
+                
+                
+            optimizer.zero_grad()   # Zero the gradient buffers
+
+            output = net(batch_xs)
+            train_loss, train_accuracy = dataset.loss(output, batch_ys)
+            train_loss += net.loss()
+            train_loss.backward()
+
+            optimizer.step()
+            
+            # Save output image every log_freq epochs
+            if  epoch % log_freq == 0 and step == 0:
+                # Move output to CPU and convert to numpy array
+                output_np = output.detach().cpu().numpy()
+                
+                #squeeze
+                output_np = np.squeeze(output_np)
+                
+                # Save output as .mat file for MATLAB
+                os.makedirs(os.path.join(result_path, 'matlab'), exist_ok=True)
+                sio.savemat(os.path.join(result_path, 'matlab', f'output_epoch_{epoch}.mat'), 
+                           {'output': output_np})
+                
+                diff = np.abs(output_np - y)
+                diffx10 = np.abs(output_np - y) * 10
+                
+                diff = np.abs(diff) / np.max(np.abs(y))
+                diffx10 = np.abs(diffx10) / np.max(np.abs(y))
+                
+                output_np = np.abs(output_np) / np.max(np.abs(output_np))
+                output_np = output_np.clip(0, 1)
+                
+                # Reshape to 128x128 image
+                output_img = output_np.reshape(128, 128)
+                
+                # Create directory if it doesn't exist
+                os.makedirs(os.path.join(result_path, 'images'), exist_ok=True)
+                
+                
+                # Rotate 90 degrees counter clockwise
+                output_img = np.rot90(output_img)
+                y_scaled = np.rot90(y_scaled)
+                x_scaled = np.rot90(x_scaled)
+                diff = np.rot90(diff)
+                diffx10 = np.rot90(diffx10)
+                
+                # Save as PNG using PIL
+                img = Image.fromarray(np.concatenate([x_scaled * 255, y_scaled * 255, output_img * 255, diff * 255, diffx10 * 255], axis=1).astype(np.uint8))
+                img.save(os.path.join(result_path, 'images', f'output_epoch_{epoch}.png'))
+
+            # Log training metrics every log_freq steps
+            total_step = (epoch + epoch_offset)*len(dataset.train_loader) + step+1
+            if total_step % log_freq == 0:
+                log_stats('Train', 'Train', train_loss.data.item(), train_accuracy.data.item(), total_step)
+                
+                # Update progress bar description with current metrics
+                current_lr = optimizer.param_groups[0]['lr']
+                pbar.set_description(f'LR: {current_lr:.2e} Loss: {train_loss.data.item():.4f}')
+
+        # Update LR
+        lr_scheduler.step()
+
+    # Save last checkpoint
+    save_path = os.path.join(checkpoint_path, 'last')
+    with open(save_path, 'wb') as f:
+        torch.save(net.state_dict(), f)
+    logging.debug(("Last model saved in file: %s" % save_path))
+
+    writer.export_scalars_to_json(os.path.join(log_path, "all_scalars.json"))
+    writer.close()
+
+    pkl.dump(losses, open(os.path.join(result_path, 'losses.pkl'), 'wb'), protocol=2)
+    pkl.dump(accuracies, open(os.path.join(result_path, 'accuracies.pkl'), 'wb'), protocol=2)
     logging.debug('Saved losses and accuracies to: ' + result_path)
 
     return losses, accuracies

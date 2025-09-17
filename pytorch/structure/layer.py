@@ -130,12 +130,59 @@ class LowRank(Layer):
 
     def reset_parameters(self):
         super().reset_parameters()
-        self.G = Parameter(torch.Tensor(self.r, self.layer_size))
-        self.H = Parameter(torch.Tensor(self.r, self.layer_size))
+        if self.is_complex:
+            if self.dim == 1:
+                self.G = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.complex64))
+                self.H = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.complex64))
+            else:
+                self.G = Parameter(torch.Tensor(self.r, self.layer_size, self.layer_size).to(dtype=torch.complex64))
+                self.H = Parameter(torch.Tensor(self.r, self.layer_size, self.layer_size).to(dtype=torch.complex64))
+        else:
+            if self.dim == 1:
+                self.G = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.float32))
+                self.H = Parameter(torch.Tensor(self.r, self.layer_size).to(dtype=torch.float32))
+            else:
+                self.G = Parameter(torch.Tensor(self.r, self.layer_size, self.layer_size).to(dtype=torch.float32))
+                self.H = Parameter(torch.Tensor(self.r, self.layer_size, self.layer_size).to(dtype=torch.float32))
+        # self.init_stddev = 0.01
+        if self.dim == 1:
+            self.init_stddev = np.power(1. / (self.r * self.layer_size), 1/2)
+        else:
+            self.init_stddev = np.power(1. / (self.r * self.layer_size * self.layer_size), 1/2)
+        torch.nn.init.normal_(self.G, std=self.init_stddev)
+        torch.nn.init.normal_(self.H, std=self.init_stddev)
+
+    def forward(self, x):
+        xH = torch.matmul(x, self.H.t())
+        out = torch.matmul(xH, self.G)
+        return self.apply_bias(out)
+
+    def loss(self):
+        return 0
+        # lamb = 0.0001
+        # return lamb*torch.sum(torch.abs(self.G)) + lamb*torch.sum(torch.abs(self.H))
+        
+class LowRankSymmetric(Layer):
+    class_type = 'low_rank_symmetric'
+    abbrev = 'lrs'
+
+    def name(self):
+        return self.__class__.abbrev + str(self.r)
+
+    def __init__(self, layer_size, r=1, **kwargs):
+        super().__init__(layer_size, r=r, **kwargs)
+
+    def reset_parameters(self):
+        super().reset_parameters()
+        
+        if self.is_complex:
+            self.G = Parameter(torch.zeros(self.r, self.layer_size, dtype=torch.complex64))
+        else:
+            self.G = Parameter(torch.zeros(self.r, self.layer_size, dtype=torch.float32))
+            
         # self.init_stddev = 0.01
         self.init_stddev = np.power(1. / (self.r * self.layer_size), 1/2)
         torch.nn.init.normal_(self.G, std=self.init_stddev)
-        torch.nn.init.normal_(self.H, std=self.init_stddev)
 
     def forward(self, x):
         xH = torch.matmul(x, self.H.t())
@@ -158,6 +205,18 @@ class ToeplitzLike(LowRank):
 
     def forward(self, x):
         out = toep.toeplitz_mult(self.G, self.H, x, self.corner)
+        return self.apply_bias(out)
+    
+class ToeplitzLikeSymmetric(LowRank):
+    class_type = 'toeplitz_symmetric'
+    abbrev = 'ts'
+    
+    def reset_parameters(self):
+        super().reset_parameters()
+        self.corner = False
+
+    def forward(self, x):
+        out = toep.toeplitz_mult_symmetric(self.G, self.H, x, dim=self.dim, is_complex=self.is_complex)
         return self.apply_bias(out)
 
 class ToeplitzLikeC(ToeplitzLike):

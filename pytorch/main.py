@@ -6,6 +6,7 @@ import threading
 import logging
 import pprint
 import numpy as np
+import plotext as pltext
 import torch
 from torch.optim.lr_scheduler import StepLR
 from inspect import signature
@@ -31,7 +32,7 @@ parser.add_argument("--dataset", help='Dataset')
 parser.add_argument('--transform', default='none', help='Any transform of dataset, e.g. padding')
 parser.add_argument('--train-frac', type=float, nargs='+', default=[None])
 parser.add_argument('--val-frac', type=float, default=0.15)
-parser.add_argument("--result-dir", help='Where to save results')
+parser.add_argument("--result-dir", default='results', help='Where to save results')
 parser.add_argument('--trials', type=int, default=1, help='Number of independent runs')
 parser.add_argument('--trial-id', type=int, nargs='+', help='Specify trial numbers; alternate to --trials')
 parser.add_argument('--batch-size', type=int, default=50, help='Batch size')
@@ -48,8 +49,13 @@ parser.add_argument('--prune-factor', type=float, default=1, help='Factor by whi
 parser.add_argument('--prune-iters', type=int, default=1, help='Number of pruning iters')
 parser.add_argument('--save-model', action='store_false', help='Whether to save best model')
 parser.add_argument('--data-dir', default='../../datasets/', help='Data directory')
-
-out_dir = os.path.dirname(pytorch_root) # Repo root
+parser.add_argument('--case-name', default='', help='Case name')
+parser.add_argument('--slice-idx', default=1, help='Slice index')
+parser.add_argument('--mask-type', default='GRAPPA', help='Mask type')
+parser.add_argument('--operator-type', default='circulant', help='MRI Operator type, either toeplitz or circulant')
+parser.add_argument('--mri-train-type', default='forward', help='MRI train type, either forward or inverse')
+parser.add_argument('--single-coil', action='store_true', help='Whether to use single-coil operator (no coil maps)')
+out_dir = pytorch_root # Repo root
 
 # seed = 0
 # np.random.seed(seed)
@@ -71,16 +77,34 @@ def save_args(args, results_dir):
     text_file.close()
 
     # Save the Namespace object
-    pkl.dump(args, open(os.path.join(results_dir, 'params.p'), "wb"))
+    pkl.dump(args, open(os.path.join(results_dir, 'params.pkl'), "wb"))
 
 
 def mlp(args):
     for train_frac in args.train_frac:
-        dataset = DatasetLoaders(args.dataset, args.data_dir, args.val_frac, args.transform, train_frac, args.batch_size)
+        
+        dataset = DatasetLoaders(
+            name = args.dataset,
+            data_dir = args.data_dir,
+            val_fraction = args.val_frac,
+            transform = args.transform,
+            train_fraction = train_frac,
+            batch_size = args.batch_size,
+            case_name = args.case_name,
+            slice_idx = args.slice_idx,
+            mask_name = args.mask_type,
+            mri_train_type = args.mri_train_type,
+            operator_type = args.operator_type,
+            single_coil = args.single_coil,
+            dim = args.dim,
+            is_complex = args.is_complex
+        )
+        
         model = construct_model(nets[args.model], dataset.in_size, dataset.out_size, args)
 
         for lr, mom in itertools.product(args.lr, args.mom):
             run_name = args.name + '_' + model.name() \
+                    + '_' + args.mri_train_type \
                     + '_lr' + str(lr) \
                     + '_lrd' + str(args.lr_decay) \
                     + '_mom' + str(mom) \
@@ -100,16 +124,19 @@ def mlp(args):
                 run_name += '_pf' + str(args.prune_factor)
 
             results_dir = os.path.join(out_dir,
-                                        'results',
                                         args.result_dir,
-                                        run_name + '_' + str(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
+                                        str(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")) + '_' + run_name)
             save_args(args, results_dir)
 
             trial_ids = args.trial_id if args.trial_id is not None else range(args.trials)
             for trial_iter in trial_ids:
                 log_path = os.path.join(out_dir, 'tensorboard', args.result_dir, run_name, str(trial_iter))
                 checkpoint_path = os.path.join(out_dir, 'checkpoints', args.result_dir, run_name, str(trial_iter))
-                result_path = os.path.join(results_dir, str(trial_iter))
+                
+                if args.trials > 1:
+                    result_path = os.path.join(results_dir, str(trial_iter))
+                else:
+                    result_path = results_dir
 
                 model.reset_parameters()
                 if args.optim == 'sgd':
@@ -122,15 +149,18 @@ def mlp(args):
                     assert False, "invalid optimizer"
                 lr_scheduler = StepLR(optimizer, step_size=1, gamma=args.lr_decay)
 
-                if args.prune:
-                    # Is there a better way to enforce pruning only for unconstrained and MLP?
-                    assert model.class_type in ['unconstrained', 'u'] and args.model in ['MLP','CNN']
-                    prune.prune(dataset, model, optimizer, lr_scheduler, args.epochs, args.log_freq, log_path,
-                        checkpoint_path, result_path, args.test, args.save_model, args.prune_lr_decay, args.prune_factor,
-                        args.prune_iters)
-                else:
-                    train.train(dataset, model, optimizer, lr_scheduler, args.epochs, args.log_freq,
-                        log_path, checkpoint_path, result_path, args.test, args.save_model)
+                # if args.prune:
+                #     # Is there a better way to enforce pruning only for unconstrained and MLP?
+                #     assert model.class_type in ['unconstrained', 'u'] and args.model in ['MLP','CNN']
+                #     prune.prune(dataset, model, optimizer, lr_scheduler, args.epochs, args.log_freq, log_path,
+                #         checkpoint_path, result_path, args.test, args.save_model, args.prune_lr_decay, args.prune_factor,
+                #         args.prune_iters)
+                # else:
+                #     train.train(dataset, model, optimizer, lr_scheduler, args.epochs, args.log_freq,
+                #         log_path, checkpoint_path, result_path, args.test, args.save_model)
+                
+                train.train_MRI(dataset, model, optimizer, lr_scheduler, args.epochs, args.log_freq, log_path,
+                    checkpoint_path, result_path, epoch_offset=0)
 
 
 ## Parse
@@ -147,7 +177,7 @@ for model in descendants(ArghModel):
     model.args.__name__ = model.__name__
     model_options.append(model.args)
     nets[model.__name__] = model
-argh.add_commands(parser, model_options, namespace='model', namespace_kwargs={'dest': 'model'})
+argh.add_commands(parser, model_options, group_name='model', group_kwargs={'dest': 'model'})
 for model in ArghModel.__subclasses__():
     # Change names back
     model.args.__name__ = 'args'

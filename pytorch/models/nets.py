@@ -333,14 +333,14 @@ class SL(ArghModel):
     def name(self):
         return self.W.name()
 
-    def args(class_type='unconstrained', layer_size=-1, r=1, bias=False, hidden_size=-1): pass
+    def args(class_type='unconstrained', layer_size=-1, r=1, bias=False, hidden_size=-1, is_complex=False, dim=1): pass
     def reset_parameters(self):
         if self.layer_size == -1:
             self.layer_size = self.in_size
         if self.hidden_size == -1:
             self.hidden_size = self.in_size
         self.W = sl.StructuredLinear(self.class_type, layer_size=self.layer_size, r=self.r, bias=self.bias,
-            hidden_size=self.hidden_size)
+            hidden_size=self.hidden_size, is_complex=self.is_complex, dim=self.dim)
 
     def forward(self, x):
         return self.W(x)

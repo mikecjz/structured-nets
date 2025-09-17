@@ -343,5 +343,17 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+scripts/data/MT_CUDA/
+*.asv
+
+results/
+tensorboard/
+checkpoints/
+
+scripts/data/temp/
+scripts/data/*.png
+scripts/data/*.eps
+
+
 
 # End of https://www.gitignore.io/api/python

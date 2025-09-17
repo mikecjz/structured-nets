@@ -1,0 +1,48 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "MRI 2x Training",
+            "type": "debugpy",
+            "request": "launch",
+            "postDebugTask": "closeTerminal",
+            "program": "pytorch/main.py",
+            "args": [
+                "--name", "mri_2x",
+                "--epochs", "4000",
+                "--batch-size", "1",
+                "--lr", "3e-5",
+                "--lr-decay", "0.99995",
+                "--optim", "ams",
+                "--log-freq", "10",
+                "--data-dir", "data",
+                "--dataset", "mri_2x",
+                "--case-name", "file_brain_AXT1_201_6002779",
+                "--slice-idx", "3",
+                "--mask-type", "two_times_mask",
+                "--operator-type", "circulant",
+                "--mri-train-type", "inverse",
+                "model", "SL",
+                "--class-type", "toeplitz_symmetric",
+                "--r", "6",
+                "--is-complex",
+                "--dim", "2"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1"
+            },
+            "console": "integratedTerminal"
+        }
+    ]
+}

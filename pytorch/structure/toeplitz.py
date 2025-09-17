@@ -34,18 +34,32 @@ def toeplitz_krylov_transpose_multiply(v, u, f=0.0):
             arg = torch.stack((torch.cos(angles), torch.sin(angles)), dim=-1)
         eta = mod[:, np.newaxis] * arg
         eta_inverse = (1.0 / mod)[:, np.newaxis] * conjugate(arg)
-        u_f = torch.ifft(eta_inverse * u[..., np.newaxis], 1)
-        v_f = torch.fft(eta * v[..., np.newaxis], 1)
-        uv_f = complex_mult(u_f[:, np.newaxis], v_f[np.newaxis])
-        uv = torch.fft(uv_f, 1)
-        # We only need the real part of complex_mult(eta, uv)
-        return eta[..., 0] * uv[..., 0] - eta[..., 1] * uv[..., 1]
-    else:
-        u_f = torch.rfft(torch.cat((u.flip(1), torch.zeros_like(u)), dim=-1), 1)
-        v_f = torch.rfft(torch.cat((v, torch.zeros_like(v)), dim=-1), 1)
-        uv_f = complex_mult(u_f[:, np.newaxis], v_f[np.newaxis])
-        return torch.irfft(uv_f, 1, signal_sizes=(2 * n, ))[..., :n].flip(2)
 
+        u_temp = eta_inverse * u[..., np.newaxis]
+        u_temp = torch.complex(u_temp[..., 0], u_temp[..., 1])
+        u_f = torch.fft.ifft(u_temp)
+
+        v_temp = eta * v[..., np.newaxis]
+        v_temp = torch.complex(v_temp[..., 0], v_temp[..., 1])
+        v_f = torch.fft.fft(v_temp)
+
+        uv_f = u_f[:, np.newaxis]* v_f[np.newaxis]
+        uv = torch.fft.ifft(uv_f)
+        # We only need the real part of complex_mult(eta, uv)
+        eta_temp = torch.complex(eta[..., 0], eta[..., 1])
+        return torch.real(eta_temp * uv)
+    else:
+        u_f_temp = torch.fft.rfft(torch.cat((u.flip(1), torch.zeros_like(u)), dim=-1))
+        u_f = torch.stack((torch.real(u_f_temp), torch.imag(u_f_temp)), dim=-1)
+
+        v_f_temp = torch.fft.rfft(torch.cat((v, torch.zeros_like(v)), dim=-1))
+        v_f = torch.stack((torch.real(v_f_temp), torch.imag(v_f_temp)), dim=-1)
+
+        uv_f_temp = complex_mult(u_f[:, np.newaxis], v_f[np.newaxis])
+        uv_f = torch.complex(uv_f_temp[..., 0], uv_f_temp[..., 1])
+
+        return torch.fft.irfft(uv_f, n =2 * n)[..., :n].flip(2)
+ 
 
 def toeplitz_krylov_multiply_by_autodiff(v, w, f=0.0):
     """Multiply \sum_i Krylov(Z_f, v_i) @ w_i, using Pytorch's autodiff.
@@ -92,17 +106,143 @@ def toeplitz_krylov_multiply(v, w, f=0.0):
             arg = torch.stack((torch.cos(angles), torch.sin(angles)), dim=-1)
         eta = mod[:, np.newaxis] * arg
         eta_inverse = (1.0 / mod)[:, np.newaxis] * conjugate(arg)
-        w_f = torch.fft(eta * w[..., np.newaxis], 1)
-        v_f = torch.fft(eta * v[..., np.newaxis], 1)
-        wv_sum_f = complex_mult(w_f, v_f).sum(dim=1)
-        wv_sum = torch.ifft(wv_sum_f, 1)
+        temp_w = eta * w[..., np.newaxis]
+        temp_w = torch.complex(temp_w[..., 0], temp_w[..., 1])
+        w_f = torch.fft.fft(temp_w)
+        temp_v = eta * v[..., np.newaxis]
+        temp_v = torch.complex(temp_v[..., 0], temp_v[..., 1])
+        v_f = torch.fft.fft(temp_v)
+        wv_sum_f = (w_f * v_f).sum(dim=1)
+        wv_sum = torch.fft.ifft(wv_sum_f)
         # We only need the real part of complex_mult(eta_inverse, wv_sum)
-        return eta_inverse[..., 0] * wv_sum[..., 0] - eta_inverse[..., 1] - wv_sum[..., 1]
+        eta_inverse_temp = torch.complex(eta_inverse[..., 0], eta_inverse[..., 1])
+        return torch.real(eta_inverse_temp * wv_sum)
     else:
-        w_f = torch.rfft(torch.cat((w, torch.zeros_like(w)), dim=-1), 1)
-        v_f = torch.rfft(torch.cat((v, torch.zeros_like(v)), dim=-1), 1)
-        wv_sum_f = complex_mult(w_f, v_f).sum(dim=1)
-        return torch.irfft(wv_sum_f, 1, signal_sizes=(2 * n, ))[..., :n]
+        w_f_temp = torch.fft.rfft(torch.cat((w, torch.zeros_like(w)), dim=-1))
+        v_f_temp = torch.fft.rfft(torch.cat((v, torch.zeros_like(v)), dim=-1))
+
+        w_f = torch.stack((torch.real(w_f_temp), torch.imag(w_f_temp)), dim=-1)
+        v_f = torch.stack((torch.real(v_f_temp), torch.imag(v_f_temp)), dim=-1)
+
+        wv_sum_f_temp = complex_mult(w_f, v_f).sum(dim=1)
+        wv_sum_f = torch.complex(wv_sum_f_temp[..., 0], wv_sum_f_temp[..., 1])
+
+        return torch.fft.irfft(wv_sum_f, n = 2 * n)[..., :n]
+    
+def toeplitz_transpose_multiply_fft(H, u, dim = 1, is_complex=False):
+    """Multiply U(v) @ w (where U is the upper-triangular Toeplitz matrix) using FFT.
+    Parameters:
+        H: 1D: (rank, n) or 2D: (rank, n, n)
+        u: 1D: (batch_size, n) or 2D: (batch_size, rank, n, n)
+        dim: whether to perform 1D or 2D multiplication
+    Returns:
+        product: (batch, rank, n)
+    """
+    n = H.shape[1]
+    
+    # 1D case
+    if dim == 1:
+        # zero-pad H and w to 2n
+        H = torch.cat((H, torch.zeros_like(H)), dim=-1) # (rank, 2n)
+        u = torch.cat((u, torch.zeros_like(u)), dim=-1) # (batch_size, 2n)
+        
+        H_f = torch.fft.fft(H) # (rank, 2n)
+        u_f = torch.fft.fft(u) # (batch_size, 2n)
+        
+
+        circulant_product = torch.fft.ifft(H_f * u_f[:, np.newaxis])
+        if is_complex:
+            return circulant_product[..., :n]
+        else:
+            return circulant_product[..., :n].abs()
+        
+    # 2D case
+    elif dim == 2:
+        
+        # zero-pad H and u to (2n, 2n)
+        
+        # Width to 2n
+        H = torch.cat((H, torch.zeros_like(H)), dim=-1) # (rank, n, 2n)
+        u = torch.cat((u, torch.zeros_like(u)), dim=-1) # (batch_size, n, 2n)
+        
+        # Height to 2n
+        H = torch.cat((H, torch.zeros_like(H)), dim=-2) # (rank, 2n, 2n)
+        u = torch.cat((u, torch.zeros_like(u)), dim=-2) # (batch_size, 2n, 2n)
+        
+        H_f = torch.fft.fft2(H) # (rank, 2n, 2n)
+        u_f = torch.fft.fft2(u) # (batch_size, 2n, 2n)
+        
+        circulant_product = torch.fft.ifft2(H_f * u_f[:, np.newaxis]) # (rank, 2n, 2n)
+        
+        if is_complex:
+            return circulant_product[..., :n, :n]
+        else:
+            return circulant_product[..., :n, :n].abs()
+        
+        
+        
+    
+def toeplitz_multiply_fft(G, w, dim = 1, is_complex=False):
+    """Multiply SUM_i L(G_i) @ w_i (where L is the lower-triangular Toeplitz matrix) using FFT.
+    Parameters:
+        G: 1D: (rank, n) or 2D: (rank, n, n)
+        w: 1D: (batch_size, rank, n) or 2D: (batch_size, rank, n, n)
+        dim: whether to perform 1D or 2D multiplication
+    Returns:
+        product: (batch, n)
+    """
+    n = G.shape[1]
+    
+    # 1D case
+    if dim == 1:
+        # zero-pad G and w to 2n
+        G = torch.cat((G, torch.zeros_like(G)), dim=-1) # (rank, 2n)
+        w = torch.cat((w, torch.zeros_like(w)), dim=-1) # (batch_size, rank, 2n)
+        
+        # shift G
+        G_shifted = torch.zeros_like(G)
+        G_shifted[:, 0] = G[:, 0]
+        G_shifted[:, n+1:] = torch.flip(G[:, 1:n], dims=(-1,))
+        
+        G_f = torch.fft.fft(G_shifted)
+        w_f = torch.fft.fft(w)
+        circulant_product = torch.fft.ifft(G_f * w_f)
+        
+        #Sum over the displacement rank dimension
+        if is_complex:
+            return circulant_product[..., :n].sum(dim=1)
+        else:
+            return circulant_product[..., :n].sum(dim=1).abs()
+        
+    # 2D case
+    elif dim == 2:
+        
+        # zero-pad G and w to (2n, 2n)
+        G = torch.cat((G, torch.zeros_like(G)), dim=-1) # (rank, n, 2n)
+        w = torch.cat((w, torch.zeros_like(w)), dim=-1) # (batch_size, rank, n, 2n)
+        
+        G = torch.cat((G, torch.zeros_like(G)), dim=-2) # (rank, 2n, 2n)
+        w = torch.cat((w, torch.zeros_like(w)), dim=-2) # (batch_size, rank, 2n, 2n)
+        
+        # shift G
+        G_shifted = torch.zeros_like(G)
+        G_shifted[:, 0, 0:n] = G[:, 0, 0:n] # keep first row
+        G_shifted[:, 1:n, 0] = G[:, 1:n, 0] # keep first column
+        
+        G_shifted[:, n+1:, n+1:] = torch.flip(G[:, 1:n, 1:n], dims=(-1,-2)) # fill lower right corner with reverse order of G
+        
+        G_f = torch.fft.fft2(G_shifted) # (rank, 2n, 2n)
+        w_f = torch.fft.fft2(w) # (batch_size, rank, 2n, 2n)
+        
+        circulant_product = torch.fft.ifft2(G_f * w_f) # (batch_size, rank, 2n, 2n)
+        
+        #Sum over the displacement rank dimension
+        if is_complex:
+            return circulant_product[..., :n, :n].sum(dim=1)
+        else:
+            return circulant_product[..., :n, :n].sum(dim=1).abs()
+        
+        
 
 
 def toeplitz_mult(G, H, x, cycle=True):
@@ -119,6 +259,22 @@ def toeplitz_mult(G, H, x, cycle=True):
     f = (1, -1) if cycle else (0, 0)
     transpose_out = toeplitz_krylov_transpose_multiply(H, x, f[1])
     return toeplitz_krylov_multiply(G, transpose_out, f[0])
+
+def toeplitz_mult_symmetric(G, H, x, dim=1, cycle=False, is_complex=False):
+    """Multiply \sum_i Krylov(Z_f, G_i) @ Krylov(Z_f, H_i) @ x.
+    Parameters:
+        G: Tensor of shape (rank, n)
+        x: Tensor of shape (batch_size, n)
+        cycle: whether to use f = (1, -1) or f = (0, 0)
+    Returns:
+        product: Tensor of shape (batch_size, n)
+    """
+    
+    if cycle:
+        raise NotImplementedError("Symmetric toeplitz multiplication with cycle not implemented")
+    # f = (1,-1) if cycle else (1,1)
+    transpose_out = toeplitz_transpose_multiply_fft(H, x, dim = dim, is_complex=is_complex)
+    return toeplitz_multiply_fft(G, transpose_out, dim = dim, is_complex=is_complex)
 
 
 ##### Slow multiplication for the Toeplitz-like case
