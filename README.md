@@ -1,5 +1,9 @@
-> [!NOTE] 
-> This repo uses infrastructure provided by [Thomas et al. (2019)](https://arxiv.org/abs/1810.02309), and is forked from [HazyResearch/structured-nets](https://github.com/HazyResearch/structured-nets).
+# Structered Low-Displacement Rank Layer for Multi-coil MR Operator
+
+> [!NOTE]
+> This repo uses infrastructure provided by [Thomas et al.
+> (2019)](https://arxiv.org/abs/1810.02309), and is forked from
+> [HazyResearch/structured-nets](https://github.com/HazyResearch/structured-nets).
 
 [[Project Page]](https://junzhou.chen.engineer/LDR/)
 
@@ -70,11 +74,15 @@ To generate GIFs of the training process, run:
 
 ## Implementation Details
 
-The LDR layer for the multi-coil MR operator is implemented as class  `ToeplitzLikeSymmetric` in [pytorch/structure/toeplitz.py](pytorch/structure/layer.py#L210-L221). 
+The LDR layer for the multi-coil MR operator is implemented as class  `ToeplitzLikeSymmetric` in
+[pytorch/structure/toeplitz.py](pytorch/structure/layer.py#L210-L221). 
 
-Under the hood, the Triangular Toeplitz operators are implemented using FFT with [toeplitz_transpose_multiply_fft](pytorch/structure/toeplitz.py#L132) and [toeplitz_multiply_fft](pytorch/structure/toeplitz.py#L185).
+Under the hood, the Triangular Toeplitz operators are implemented using FFT with
+[toeplitz_transpose_multiply_fft](pytorch/structure/toeplitz.py#L132) and
+[toeplitz_multiply_fft](pytorch/structure/toeplitz.py#L185).
 
-The specific ataset for loading MRI data is `get_MRI_dataset` in [pytorch/dataset.py](pytorch/dataset.py#L80-L126).
+The specific ataset for loading MRI data is `get_MRI_dataset` in
+[pytorch/dataset.py](pytorch/dataset.py#L80-L126).
 
 ## Bibtex
 
