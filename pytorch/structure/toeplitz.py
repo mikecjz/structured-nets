@@ -207,6 +207,8 @@ def toeplitz_multiply_fft(G, w, dim = 1, is_complex=False):
         G_f = torch.fft.fft(G_shifted)
         w_f = torch.fft.fft(w)
         circulant_product = torch.fft.ifft(G_f * w_f)
+        
+        #Sum over the displacement rank dimension
         if is_complex:
             return circulant_product[..., :n].sum(dim=1)
         else:
@@ -234,6 +236,7 @@ def toeplitz_multiply_fft(G, w, dim = 1, is_complex=False):
         
         circulant_product = torch.fft.ifft2(G_f * w_f) # (batch_size, rank, 2n, 2n)
         
+        #Sum over the displacement rank dimension
         if is_complex:
             return circulant_product[..., :n, :n].sum(dim=1)
         else:
