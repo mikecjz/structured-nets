@@ -15,8 +15,7 @@ feasibility of direct inversion of the multi-coil MR operator based on the theor
 displacement rank (LDR). [see Kailath et al.,
 1979](https://www.sciencedirect.com/science/article/pii/0022247X79901240).
 
-
-![LDR Learning Process](https://junzhou.chen.engineer/LDR/static/gifs/LDR_learning_process.gif)
+![LDR_learning_process](https://github.com/user-attachments/assets/5bf8d167-7e30-43c7-93cd-87ca2bbcbe22)
 <center>Learning Process in PyTorch with LDR Operator Built with Learnable Triangular Toeplitz Operators</center>
 
 
