@@ -7,6 +7,9 @@ from torch.nn.parameter import Parameter
 
 import structure.LDR as ldr
 import structure.layer as sl
+import structure.toeplitz as toep
+from .unets import *
+
 
 
 def construct_model(cls, in_size, out_size, args):
@@ -378,3 +381,27 @@ class MLP(ArghModel):
         for i in range(self.num_layers-1):
             output = F.relu(self.layers[i+1](output))
         return self.W2(output)
+
+class UNET_LDR(ArghModel):
+    def name(self):
+        return f"UNET_LDR_b{self.base_depth}_l{len(self.depth_mult)}"
+    
+    def args(base_depth=64, depth_mult=[1, 2, 4, 8, 16], bilinear=False, n_channels=10, n_classes=12): 
+        pass
+    
+    def reset_parameters(self):
+
+        self.unet = FlexibleUNET(self.base_depth, self.depth_mult, self.bilinear, self.n_channels, self.n_classes)
+
+    def forward(self, k_psfs, x):
+
+        out = self.unet(k_psfs) # Expected output: (batch_size, n_classes, H, W)
+
+        # Seperate out G and H
+        G = out[:, :self.n_classes//2, :, :]
+        H = out[:, self.n_classes//2:, :, :]
+
+        w = toep.toeplitz_mult_kspace(G, x) # (batch_size, rank, n, n)
+        ldr_out = toep.toeplitz_tranpose_mult_kspace(H, w)
+
+        return ldr_out

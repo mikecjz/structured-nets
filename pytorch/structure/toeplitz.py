@@ -241,8 +241,98 @@ def toeplitz_multiply_fft(G, w, dim = 1, is_complex=False):
             return circulant_product[..., :n, :n].sum(dim=1)
         else:
             return circulant_product[..., :n, :n].sum(dim=1).abs()
+
+
+def toeplitz_tranpose_mult_kspace(H, u, dim = 2, is_complex=False):
+    """Multiply H @ u (where H is a series of upper-triangular Toeplitz matrices) using FFT, with H represented in the frequency domain.
+    Parameters:
+        H: The frequency representation of a series of upper-triangular Toeplitz matrices 1D: (batch_size, rank, 2n) or 2D: (batch_size, rank, 2n, 2n)
+        u: The image domain representation of a series of vectors 1D: (batch_size, n) or 2D: (batch_size, n, n)
+        dim: whether to perform 1D or 2D multiplication
+    Returns:
+        product: (batch, rank, n)
+    """
+
+    if dim == 1:
+        raise NotImplementedError("dim == 1 not implemented")
+    elif dim == 2:
+        n = u.shape[-1]
+        pad_size = n // 2
+
+        #expand the rank dimension of u
+        u = torch.expand_dims(u, dim=1)
+
+        # Zero-pad u to (2n, 2n)
+        u = torch.nn.functional.pad(u, (pad_size, pad_size, pad_size, pad_size), mode='constant', value=0)
         
+        # fftshift both H and u
+        H = torch.fft.fftshift(H, dim=(-1,-2))
+        u = torch.fft.fftshift(u, dim=(-1,-2))
+
+        # Transform u to kspace
+        u_f = torch.fft.fft2(u)
         
+        # Multiply in frequency domain
+        product_f = H * u_f # (batch_size, rank, 2n, 2n)
+
+        # Transform back to image domain
+        product = torch.fft.ifft2(product_f)
+
+        # ifftshift product
+        product = torch.fft.ifftshift(product, dim=(-1,-2))
+
+        # Extract the center n x n region
+        product = product[..., pad_size:pad_size+n, pad_size:pad_size+n]
+
+        # Return the product
+        if is_complex:
+            return product
+        else:
+            return product.abs()
+        
+def toeplitz_mult_kspace(G, w, dim = 2, is_complex=True):
+    """Multiply G @ w (where G is a series of lower-triangular Toeplitz matrices) using FFT, with G represented in the frequency domain.
+    Parameters:
+        G: The frequency representation of a series of lower-triangular Toeplitz matrices 1D: (batch_size, rank, 2n) or 2D: (batch_size, rank, 2n, 2n)
+        w: The image domain representation of G * u: (batch_size, rank, n) or 2D: (batch_size, rank, n, n)
+        dim: whether to perform 1D or 2D multiplication
+    Returns:
+        product: (batch, rank, n)
+    """
+
+    if dim == 1:
+        raise NotImplementedError("dim == 1 not implemented")
+    elif dim == 2:
+        n = w.shape[-1]
+        pad_size = n // 2
+
+        # Zero-pad 2 to (2n, 2n)
+        w = torch.nn.functional.pad(w, (pad_size, pad_size, pad_size, pad_size), mode='constant', value=0)
+        
+        # fftshift both G and w
+        G = torch.fft.fftshift(G, dim=(-1,-2))
+        w = torch.fft.fftshift(w, dim=(-1,-2))
+
+        # Transform w to kspace
+        w_f = torch.fft.fft2(w)
+        
+        # Multiply in frequency domain
+        product_f = G * w_f # (batch_size, rank, 2n, 2n)
+
+        # Transform back to image domain
+        product = torch.fft.ifft2(product_f)
+
+        # ifftshift product
+        product = torch.fft.ifftshift(product, dim=(-1,-2))
+
+        # Extract the center n x n region
+        product = product[..., pad_size:pad_size+n, pad_size:pad_size+n]
+
+        # Sum over the rank dimension
+        if is_complex:
+            return product.sum(dim=1)
+        else:
+            return product.sum(dim=1).abs()
 
 
 def toeplitz_mult(G, H, x, cycle=True):
