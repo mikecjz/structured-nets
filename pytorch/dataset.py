@@ -1,12 +1,16 @@
 import numpy as np
 import os,sys,h5py
 import scipy.io as sio
+import pandas as pd
 from scipy.linalg import solve_sylvester
 import pickle as pkl
 import plotext as pltext
 # from sklearn.preprocessing import OneHotEncoder
 import torch
 from torchvision import datasets, transforms
+from torch.utils.data import Dataset
+
+
 
 import utils
 
@@ -204,6 +208,43 @@ def create_MRI_data_loaders(data_dir, case_name, slice_idx, mask_name, mri_train
     
     return train_loader, in_size, out_size
 
+def create_MRI_data_loaders_learnable(data_dir, **kwargs):
+    """
+    Create efficient MRI data loaders that don't load everything into memory for learnable operators
+    """
+    dataset = MRIDataset(data_dir, **kwargs)
+    
+    if torch.cuda.is_available():
+        loader_args = {'num_workers': 4, 'pin_memory': True}
+    else:
+        loader_args = {'num_workers': 2, 'pin_memory': False}
+    
+    train_data_loader = torch.utils.data.DataLoader(
+        dataset, 
+        train_val_test = 'train',
+        batch_size=kwargs['batch_size'], 
+        shuffle=True, 
+        **loader_args
+    )
+
+    val_data_loader = torch.utils.data.DataLoader(
+        dataset, 
+        train_val_test = 'val',
+        batch_size=kwargs['batch_size'], 
+        shuffle=True, 
+        **loader_args
+    )
+
+    test_data_loader = torch.utils.data.DataLoader(
+        dataset, 
+        train_val_test = 'test',
+        batch_size=kwargs['batch_size'], 
+        shuffle=True, 
+        **loader_args
+    )
+    
+    return train_data_loader, val_data_loader, test_data_loader, dataset.in_size, dataset.out_size
+
 
 
 
@@ -227,15 +268,11 @@ class DatasetLoaders:
             # TODO: Add support for synthetic datasets back. Possibly should be split into separate class
             self.loss = utils.mse_loss
         elif name.startswith('mri'):
-            self.train_loader, self.in_size, self.out_size = create_MRI_data_loaders(data_dir, 
-                                                                                     case_name, 
-                                                                                     slice_idx, 
-                                                                                     mask_name, 
-                                                                                     mri_train_type,
-                                                                                     operator_type,
-                                                                                     single_coil, 
-                                                                                     dim,
-                                                                                     is_complex)
+            self.train_loader, self.val_loader, self.test_loader, self.in_size, self.out_size = create_MRI_data_loaders_learnable(data_dir, 
+                                                                                                mask_name = mask_name,
+                                                                                                dim = dim,
+                                                                                                is_complex = is_complex)
+                                                                                     
             if is_complex:
                 self.loss = utils.mse_loss_complex
             else:
@@ -403,4 +440,126 @@ def AhA_toeplitz(x, SEs, mask, single_coil, is_complex, lam = 3):
         AhAx = temp
     
     return AhAx + lam * x_orig
+
+def generate_psf(extended_mask, SEs):
+
+    mask_support = np.where(np.abs(extended_mask) > 0.2)
+    ncoils = SEs.shape[2]
+    n = SEs.shape[0]
+
+    SEs_extended = np.zeros((2*n, 2*n, ncoils), dtype=np.complex64)
+    SEs_extended[n//2:n//2+n, n//2:n//2+n, :] = SEs
+
+    inverse_mask = np.zeros(extended_mask, dtype = np.complex64)
+    inverse_mask[mask_support] = 1 / extended_mask[mask_support]
+
+    inverse_mask_psf = np.fft.ifft2(inverse_mask)
+
+    inverse_mask_psf = np.conj(SEs_extended) * np.fft.ifftshift(inverse_mask_psf, axes=(-2,-1)) * SEs_extended
+
+    inverse_mask_coils = np.ifftshift(np.fft2(np.fftshift(inverse_mask_psf, axes=(-2,-1))), axes=(-2,-1))
+
+    return inverse_mask_coils
+    
+
+
+class MRIDataset(Dataset):
+    def __init__(self, 
+                data_dir = None, 
+                mask_name = None,
+                train_val_test = 'train',
+                mri_train_type = 'inverse', 
+                operator_type = 'toeplitz', 
+                is_single_coil = False, 
+                dim = 2, 
+                is_complex = True):
+        """
+        MRI Dataset that loads data on-demand using __getitem__
+        
+        Args:
+            data_dir: Directory containing MRI data
+            mask_name: Name of the mask file
+            train_val_test: 'train', 'val', or 'test'
+            mri_train_type: 'forward' or 'inverse'
+            operator_type: 'circulant' or 'toeplitz'
+            single_coil: Boolean for single coil
+            dim: Dimension (1 or 2)
+            is_complex: Boolean for complex data
+        """
+        self.data_dir = data_dir
+        self.mask_name = mask_name
+        self.train_val_test = train_val_test
+        self.mri_train_type = mri_train_type
+        self.operator_type = operator_type
+        self.is_single_coil = is_single_coil
+        self.dim = dim
+        self.is_complex = is_complex
+        
+        # Load mask once (it's shared across all slices)
+        mask_file = os.path.join('scripts/data', f'{mask_name}.mat')
+        self.mask = sio.loadmat(mask_file)['mask']
+
+        if operator_type == 'toeplitz':
+            self.mask_extended == self.mask
+        elif operator_type == 'circulant':
+            extended_mask_file = os.path.join('scripts/data', f'{mask_name}_256.mat')
+            self.mask_extended ==sio.loadmat(extended_mask_file)['mask']
+        
+        # Determine data type
+        self.data_type = torch.complex64 if is_complex else torch.float32
+
+        # Load data information from csv file
+        self.data_info = pd.read_csv(os.path.join(self.data_dir, 'mat_files_info.csv'))
+        self.dataframe = self.data_info[self.data_info['TRAIN_VAL_TEST'] == self.train_val_test.upper()]
+        
+        
+        
+    def __len__(self):
+        return len(self.dataframe)
+    
+    def __getitem__(self, idx):
+        """Load and process a single slice on-demand"""
+        X, Y, inverse_mask_coils = self._load_slice_data(idx)
+        return torch.from_numpy(X), torch.from_numpy(Y), torch.from_numpy(inverse_mask_coils)
+    
+    def _load_slice_data(self, idx):
+        """Load and process data for a single slice"""
+
+        case_path = self.dataframe.iloc[idx]['relative_path']
+        datafile = os.path.join(self.data_dir, case_path)
+        data = sio.loadmat(datafile)
+        
+        if self.is_complex:
+            image = data['image_slice']
+            SEs = data['SEs_slice']
+            image = image / np.max(np.abs(image))
+        else:
+            image = data['image_slice_abs'] / np.max(data['image_slice_abs'])
+            SEs = data['SEs_slice_abs']
+        
+        if self.dim == 1:
+            SEs = SEs[None, 64, :, :]  # keep the center row and retain first dimension
+        
+        # Apply operator
+        if self.operator_type == 'circulant':
+            AhAx = AhA_cartesian(image, SEs, self.mask, self.is_single_coil, self.is_complex)
+        elif self.operator_type == 'toeplitz':
+            AhAx = AhA_toeplitz(image, SEs, self.mask, self.is_single_coil, self.is_complex)
+
+        inverse_mask_coils = generate_psf(self.mask_extended, SEs)
+        
+        # Determine input/output based on train type
+        if self.mri_train_type == 'forward':
+            X = image
+            Y = AhAx
+        elif self.mri_train_type == 'inverse':
+            X = AhAx
+            Y = image
+        
+        # Add batch dimension for 2D case
+        if self.dim == 2:
+            X = np.expand_dims(X, axis=0)
+            Y = np.expand_dims(Y, axis=0)
+        
+        return X, Y, inverse_mask_coils
 
