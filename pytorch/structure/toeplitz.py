@@ -259,8 +259,7 @@ def toeplitz_tranpose_mult_kspace(H, u, dim = 2, is_complex=False):
         n = u.shape[-1]
         pad_size = n // 2
 
-        #expand the rank dimension of u
-        u = torch.expand_dims(u, dim=1)
+
 
         # Zero-pad u to (2n, 2n)
         u = torch.nn.functional.pad(u, (pad_size, pad_size, pad_size, pad_size), mode='constant', value=0)
@@ -305,6 +304,7 @@ def toeplitz_mult_kspace(G, w, dim = 2, is_complex=True):
     elif dim == 2:
         n = w.shape[-1]
         pad_size = n // 2
+
 
         # Zero-pad 2 to (2n, 2n)
         w = torch.nn.functional.pad(w, (pad_size, pad_size, pad_size, pad_size), mode='constant', value=0)

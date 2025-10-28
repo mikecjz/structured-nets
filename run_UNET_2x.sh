@@ -2,7 +2,7 @@
 export CUDA_VISIBLE_DEVICES=1
 # Default train type
 TYPE="inverse"
-DATA_DIR="data"
+DATA_DIR="/common/lidxxlab/Junzhou/fastMRI/multicoil_train"
 
 # Parse command line arguments
 while [ "$#" -gt 0 ]; do
@@ -31,8 +31,7 @@ python pytorch/main.py \
     --mask-type two_times_mask \
     --operator-type circulant \
     --mri-train-type $TYPE \
-    model UNET_LDR \
-    --class-type toeplitz_symmetric \
+    model UNETLDR \
     --r 6 \
     --is-complex \
     --dim 2

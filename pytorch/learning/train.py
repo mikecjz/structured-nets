@@ -192,8 +192,8 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
             
         for step, data in enumerate(dataset.train_loader, 0):
             # Get the inputs
-            batch_xs, batch_ys = data
-            batch_xs, batch_ys = batch_xs.to(device), batch_ys.to(device)
+            batch_xs, batch_ys, batch_psfs = data
+            batch_xs, batch_ys, batch_psfs = batch_xs.to(device), batch_ys.to(device), batch_psfs.to(device)
             
             # Save input x and target y if first step
             if step == 0:
@@ -202,8 +202,8 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 y = batch_ys.detach().cpu().numpy()
                 
                 #squeeze
-                x = np.squeeze(x)
-                y = np.squeeze(y)
+                x = np.squeeze(x[0,...])
+                y = np.squeeze(y[0,...])
                 
                 x_scaled = np.abs(x) / np.max(np.abs(x))
                 y_scaled = np.abs(y) / np.max(np.abs(y))
@@ -218,7 +218,7 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 
             optimizer.zero_grad()   # Zero the gradient buffers
 
-            output = net(batch_xs)
+            output = net(batch_psfs, batch_xs)
             train_loss, train_accuracy = dataset.loss(output, batch_ys)
             train_loss += net.loss()
             train_loss.backward()
@@ -231,7 +231,7 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 output_np = output.detach().cpu().numpy()
                 
                 #squeeze
-                output_np = np.squeeze(output_np)
+                output_np = np.squeeze(output_np[0,...])
                 
                 # Save output as .mat file for MATLAB
                 os.makedirs(os.path.join(result_path, 'matlab'), exist_ok=True)

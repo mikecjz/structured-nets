@@ -208,11 +208,13 @@ def create_MRI_data_loaders(data_dir, case_name, slice_idx, mask_name, mri_train
     
     return train_loader, in_size, out_size
 
-def create_MRI_data_loaders_learnable(data_dir, **kwargs):
+def create_MRI_data_loaders_learnable(data_dir, batch_size, **kwargs):
     """
     Create efficient MRI data loaders that don't load everything into memory for learnable operators
     """
-    dataset = MRIDataset(data_dir, **kwargs)
+    train_dataset = MRIDataset(data_dir, train_val_test = 'train', **kwargs)
+    val_dataset = MRIDataset(data_dir, train_val_test = 'val', **kwargs)
+    test_dataset = MRIDataset(data_dir, train_val_test = 'test', **kwargs)
     
     if torch.cuda.is_available():
         loader_args = {'num_workers': 4, 'pin_memory': True}
@@ -220,30 +222,27 @@ def create_MRI_data_loaders_learnable(data_dir, **kwargs):
         loader_args = {'num_workers': 2, 'pin_memory': False}
     
     train_data_loader = torch.utils.data.DataLoader(
-        dataset, 
-        train_val_test = 'train',
-        batch_size=kwargs['batch_size'], 
+        train_dataset, 
+        batch_size=batch_size, 
         shuffle=True, 
         **loader_args
     )
 
     val_data_loader = torch.utils.data.DataLoader(
-        dataset, 
-        train_val_test = 'val',
-        batch_size=kwargs['batch_size'], 
+        val_dataset, 
+        batch_size=batch_size, 
         shuffle=True, 
         **loader_args
     )
 
     test_data_loader = torch.utils.data.DataLoader(
-        dataset, 
-        train_val_test = 'test',
-        batch_size=kwargs['batch_size'], 
+        test_dataset, 
+        batch_size=batch_size, 
         shuffle=True, 
         **loader_args
     )
     
-    return train_data_loader, val_data_loader, test_data_loader, dataset.in_size, dataset.out_size
+    return train_data_loader, val_data_loader, test_data_loader, train_dataset.in_size, train_dataset.out_size
 
 
 
@@ -263,15 +262,19 @@ class DatasetLoaders:
                  operator_type = 'circulant',
                  single_coil = False,
                  dim = 1,
-                 is_complex = False):
+                 is_complex = True):
         if name.startswith('true'):
             # TODO: Add support for synthetic datasets back. Possibly should be split into separate class
             self.loss = utils.mse_loss
         elif name.startswith('mri'):
-            self.train_loader, self.val_loader, self.test_loader, self.in_size, self.out_size = create_MRI_data_loaders_learnable(data_dir, 
-                                                                                                mask_name = mask_name,
-                                                                                                dim = dim,
-                                                                                                is_complex = is_complex)
+            self.train_loader, self.val_loader, self.test_loader, self.in_size, self.out_size = create_MRI_data_loaders_learnable(data_dir,
+                                                                                                    batch_size,
+                                                                                                    mask_name = mask_name,
+                                                                                                    dim = dim,
+                                                                                                    is_complex = is_complex,
+                                                                                                    operator_type = operator_type,
+                                                                                                    )
+
                                                                                      
             if is_complex:
                 self.loss = utils.mse_loss_complex
@@ -450,14 +453,16 @@ def generate_psf(extended_mask, SEs):
     SEs_extended = np.zeros((2*n, 2*n, ncoils), dtype=np.complex64)
     SEs_extended[n//2:n//2+n, n//2:n//2+n, :] = SEs
 
-    inverse_mask = np.zeros(extended_mask, dtype = np.complex64)
+    SEs_extended = np.transpose(SEs_extended, (2,0,1)) # (ncoils, 2n, 2n)
+
+    inverse_mask = np.zeros_like(extended_mask, dtype = np.complex64)
     inverse_mask[mask_support] = 1 / extended_mask[mask_support]
 
     inverse_mask_psf = np.fft.ifft2(inverse_mask)
 
     inverse_mask_psf = np.conj(SEs_extended) * np.fft.ifftshift(inverse_mask_psf, axes=(-2,-1)) * SEs_extended
 
-    inverse_mask_coils = np.ifftshift(np.fft2(np.fftshift(inverse_mask_psf, axes=(-2,-1))), axes=(-2,-1))
+    inverse_mask_coils = np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(inverse_mask_psf, axes=(-2,-1))), axes=(-2,-1))
 
     return inverse_mask_coils
     
@@ -494,16 +499,18 @@ class MRIDataset(Dataset):
         self.is_single_coil = is_single_coil
         self.dim = dim
         self.is_complex = is_complex
+        self.mask_extended = None
+
         
         # Load mask once (it's shared across all slices)
         mask_file = os.path.join('scripts/data', f'{mask_name}.mat')
         self.mask = sio.loadmat(mask_file)['mask']
 
         if operator_type == 'toeplitz':
-            self.mask_extended == self.mask
+            self.mask_extended = self.mask
         elif operator_type == 'circulant':
             extended_mask_file = os.path.join('scripts/data', f'{mask_name}_256.mat')
-            self.mask_extended ==sio.loadmat(extended_mask_file)['mask']
+            self.mask_extended =sio.loadmat(extended_mask_file)['mask']
         
         # Determine data type
         self.data_type = torch.complex64 if is_complex else torch.float32
@@ -511,8 +518,12 @@ class MRIDataset(Dataset):
         # Load data information from csv file
         self.data_info = pd.read_csv(os.path.join(self.data_dir, 'mat_files_info.csv'))
         self.dataframe = self.data_info[self.data_info['TRAIN_VAL_TEST'] == self.train_val_test.upper()]
-        
-        
+
+        in_size = sio.loadmat(os.path.join(self.data_dir, self.dataframe.iloc[0]['relative_path']))['image_slice'].shape[0]
+        out_size = in_size
+
+        self.in_size = in_size
+        self.out_size = out_size
         
     def __len__(self):
         return len(self.dataframe)
@@ -556,7 +567,7 @@ class MRIDataset(Dataset):
             X = AhAx
             Y = image
         
-        # Add batch dimension for 2D case
+        # Add rank dimension for 2D case
         if self.dim == 2:
             X = np.expand_dims(X, axis=0)
             Y = np.expand_dims(Y, axis=0)

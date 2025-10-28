@@ -111,9 +111,7 @@ def mlp(args):
                     + '_bs' + str(args.batch_size) \
                     + '_ep' + str(args.epochs) \
                     + '_' + str(args.dataset) \
-                    + '_vf' + str(args.val_frac) \
                     + '_m' + str(args.model) \
-                    + '_hs' + str(args.hidden_size)
 
 #+ '_nl' + str(args.num_layers)
 

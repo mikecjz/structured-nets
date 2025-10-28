@@ -382,26 +382,26 @@ class MLP(ArghModel):
             output = F.relu(self.layers[i+1](output))
         return self.W2(output)
 
-class UNET_LDR(ArghModel):
+class UNETLDR(ArghModel):
     def name(self):
-        return f"UNET_LDR_b{self.base_depth}_l{len(self.depth_mult)}"
+        return f"UNETLDR_b{self.base_depth}_l{len(self.depth_mult)}"
     
-    def args(base_depth=64, depth_mult=[1, 2, 4, 8, 16], bilinear=False, n_channels=10, n_classes=12): 
+    def args(base_depth=64, depth_mult=[1, 2, 4, 8, 16], bilinear=False, n_channels=10, r = 6, is_complex=False, dim=2): 
         pass
     
     def reset_parameters(self):
 
-        self.unet = FlexibleUNET(self.base_depth, self.depth_mult, self.bilinear, self.n_channels, self.n_classes)
+        self.unet = FlexibleUNET(self.base_depth, self.depth_mult, self.bilinear, self.n_channels, self.r * 2)
 
     def forward(self, k_psfs, x):
 
         out = self.unet(k_psfs) # Expected output: (batch_size, n_classes, H, W)
 
         # Seperate out G and H
-        G = out[:, :self.n_classes//2, :, :]
-        H = out[:, self.n_classes//2:, :, :]
+        G = out[:, :self.r, :, :]
+        H = out[:, self.r:, :, :]
 
-        w = toep.toeplitz_mult_kspace(G, x) # (batch_size, rank, n, n)
-        ldr_out = toep.toeplitz_tranpose_mult_kspace(H, w)
+        w = toep.toeplitz_tranpose_mult_kspace(H, x) # (batch_size, rank, n, n)
+        ldr_out = toep.toeplitz_mult_kspace(G, w)
 
         return ldr_out
