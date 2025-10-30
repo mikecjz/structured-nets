@@ -45,6 +45,8 @@ function process_h5_file(case_dir)
     % keep the center 128x128 of the kspace
     kspace_small = kspace_half(round(Nx/2-64)+1:round(Nx/2-64)+128,round(Ny/2-64)+1:round(Ny/2-64)+128,:,:);
 
+    kspace_small = coil_compression(kspace_small,10);
+
     % convert the kspace to image
     image_small = ifftshift(ifftshift(ifft(ifft(fftshift(fftshift(kspace_small,1),2), [],1),[],2),1),2);
 
@@ -87,6 +89,21 @@ function SEs = calculate_SEs(kspace_small)
         kspace_slice = reshape(kspace_slice, 1, size(kspace_slice,1), size(kspace_slice,2), size(kspace_slice,3));
         [~] = evalc('[SEs_slice, ~] = bart(''ecalib -m 1 -c 0 -r 24'', kspace_slice);');
         SEs(:,:,:,i) = SEs_slice;
+    end
+end
+
+% Perform coil compression
+function kspace_compressed = coil_compression(kspace_small, num_coils)
+
+    [Nx, Ny, Ncoils, Nz] = size(kspace_small);
+
+    kspace_compressed = zeros(Nx, Ny, num_coils, Nz, 'like', kspace_small);
+
+    for i = 1:Nz
+        kspace_slice = kspace_small(:,:,:,i);
+        kspace_slice = reshape(kspace_slice, 1, Nx, Ny, Ncoils);
+        [~] = evalc(['kspace_compressed_slice = bart(''cc -p ', num2str(num_coils), ' '', kspace_slice);']);
+        kspace_compressed(:,:,:,i) = kspace_compressed_slice;
     end
 end
 

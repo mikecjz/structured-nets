@@ -343,7 +343,7 @@ def AhA_cartesian(x, SEs, mask, single_coil, is_complex):
     
     return AhAx
 
-def AhA_toeplitz(x, SEs, mask, single_coil, is_complex, lam = 3):
+def AhA_toeplitz(x, SEs, mask, single_coil, is_complex, lam = 0.03):
     """
     Compute Non Cartesian (Toeplitz) A^H A x, where A is the sensitivity encoding matrix
     
