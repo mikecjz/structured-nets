@@ -22,10 +22,10 @@ python pytorch/main.py \
     --name "mri_toep" \
     --epochs 24000 \
     --batch-size 1 \
-    --lr 3e-5 \
-    --lr-decay 0.99995 \
+    --lr 6e-6 \
+    --lr-decay 1 \
     --optim ams \
-    --log-freq 100 \
+    --log-freq 500 \
     --data-dir $DATA_DIR \
     --dataset mri_toep \
     --case-name file_brain_AXT1_201_6002779 \

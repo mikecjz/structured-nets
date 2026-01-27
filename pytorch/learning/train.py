@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
-
+from  utils import AhA_cartesian, AhA_toeplitz
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def test_split(net, dataloader, loss_fn):
@@ -192,8 +192,8 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
             
         for step, data in enumerate(dataset.train_loader, 0):
             # Get the inputs
-            batch_xs, batch_ys = data
-            batch_xs, batch_ys = batch_xs.to(device), batch_ys.to(device)
+            batch_xs, batch_ys, batch_SEs, batch_mask = data
+            batch_xs, batch_ys, batch_SEs, batch_mask = batch_xs.to(device), batch_ys.to(device), batch_SEs.to(device), batch_mask.to(device)
             
             # Save input x and target y if first step
             if step == 0:
@@ -219,7 +219,11 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
             optimizer.zero_grad()   # Zero the gradient buffers
 
             output = net(batch_xs)
-            train_loss, train_accuracy = dataset.loss(output, batch_ys)
+
+            # Project back to AhA x output
+            AhA_output = dataset.AhA(output, batch_SEs, batch_mask, dataset.single_coil, dataset.is_complex)
+            
+            train_loss, train_accuracy = dataset.loss(AhA_output, batch_xs)
             train_loss += net.loss()
             train_loss.backward()
 

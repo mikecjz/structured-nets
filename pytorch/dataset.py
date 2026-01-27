@@ -114,7 +114,9 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_name, mri_train_type, o
         
     if dim == 2:
         train_X = np.expand_dims(train_X, axis=0) # add batch dimension  
-        train_Y = np.expand_dims(train_Y, axis=0) # add batch dimension 
+        train_Y = np.expand_dims(train_Y, axis=0) # add batch dimension
+        train_SEs = np.expand_dims(SEs, axis=0) # add batch dimension
+        train_mask = np.expand_dims(mask, axis=0) # add batch dimension
     
     in_size = train_X.shape[1]
     out_size = train_Y.shape[1]
@@ -123,7 +125,7 @@ def get_MRI_dataset(data_dir, case_name, slice_idx, mask_name, mri_train_type, o
     print("In size: ", in_size)
     print("Out size: ", out_size)
     
-    return torch.from_numpy(train_X), torch.from_numpy(train_Y), in_size, out_size
+    return torch.from_numpy(train_X), torch.from_numpy(train_Y), torch.from_numpy(train_SEs), torch.from_numpy(train_mask), in_size, out_size
 
 
 
@@ -197,9 +199,9 @@ def create_data_loaders(dataset_name, data_dir, transform, train_fraction, val_f
 
 def create_MRI_data_loaders(data_dir, case_name, slice_idx, mask_name, mri_train_type, operator_type, single_coil, dim, is_complex):
     
-    train_X, train_Y, in_size, out_size = get_MRI_dataset(data_dir, case_name, slice_idx, mask_name, mri_train_type, operator_type, single_coil, dim, is_complex)
+    train_X, train_Y, train_SEs, train_mask, in_size, out_size = get_MRI_dataset(data_dir, case_name, slice_idx, mask_name, mri_train_type, operator_type, single_coil, dim, is_complex)
     
-    train_dataset = torch.utils.data.TensorDataset(train_X, train_Y)
+    train_dataset = torch.utils.data.TensorDataset(train_X, train_Y, train_SEs, train_mask)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=train_X.shape[0], shuffle=False)
     
     return train_loader, in_size, out_size
@@ -236,6 +238,16 @@ class DatasetLoaders:
                                                                                      single_coil, 
                                                                                      dim,
                                                                                      is_complex)
+
+
+            self.is_complex = is_complex
+            self.single_coil = single_coil
+
+            if operator_type == 'circulant':
+                self.AhA = utils.AhA_cartesian
+            elif operator_type == 'toeplitz':
+                self.AhA = utils.AhA_toeplitz
+
             if is_complex:
                 self.loss = utils.mse_loss_complex
             else:
@@ -343,7 +355,7 @@ def AhA_cartesian(x, SEs, mask, single_coil, is_complex):
     
     return AhAx
 
-def AhA_toeplitz(x, SEs, mask, single_coil, is_complex, lam = 0.03):
+def AhA_toeplitz(x, SEs, mask, single_coil, is_complex):
     """
     Compute Non Cartesian (Toeplitz) A^H A x, where A is the sensitivity encoding matrix
     
@@ -402,5 +414,5 @@ def AhA_toeplitz(x, SEs, mask, single_coil, is_complex, lam = 0.03):
     else:
         AhAx = temp
     
-    return AhAx + lam * x_orig
+    return AhAx 
 
