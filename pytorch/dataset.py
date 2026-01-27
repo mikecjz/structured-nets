@@ -458,11 +458,15 @@ def generate_psf(extended_mask, SEs):
     inverse_mask = np.zeros_like(extended_mask, dtype = np.complex64)
     inverse_mask[mask_support] = 1 / extended_mask[mask_support]
 
-    inverse_mask_psf = np.fft.ifft2(inverse_mask)
+    k_inverse_mask = np.fft.ifft2(inverse_mask)
+    k_SEs_extended = np.fft.fft2(np.fft.ifftshift(SEs_extended, axes=(-2,-1)))
+    k_SEs_extended_conj = np.fft.fft2(np.fft.ifftshift(np.conj(SEs_extended), axes=(-2,-1)))
 
-    inverse_mask_psf = np.conj(SEs_extended) * np.fft.ifftshift(inverse_mask_psf, axes=(-2,-1)) * SEs_extended
 
-    inverse_mask_coils = np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(inverse_mask_psf, axes=(-2,-1))), axes=(-2,-1))
+
+    k_inverse_mask = k_SEs_extended_conj * k_inverse_mask * k_SEs_extended
+
+    inverse_mask_coils = np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(k_inverse_mask, axes=(-2,-1))), axes=(-2,-1))
 
     return inverse_mask_coils
     

@@ -186,20 +186,29 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
 
     t1 = time.time()
 
-    # Create progress bar for epochs
-    pbar = tqdm(range(epochs+1), disable=None)
-    for epoch in pbar:
+    # Calculate total number of batches
+    total_batches = epochs * len(dataset.train_loader)
+    
+    # Create progress bar for batches
+    pbar = tqdm(total=total_batches, disable=None)
+    batch_counter = 0
+    
+    for epoch in range(epochs):
             
         for step, data in enumerate(dataset.train_loader, 0):
             # Get the inputs
             batch_xs, batch_ys, batch_psfs = data
             batch_xs, batch_ys, batch_psfs = batch_xs.to(device), batch_ys.to(device), batch_psfs.to(device)
             
-            # Save input x and target y if first step
-            if step == 0:
+            # Increment batch counter
+            batch_counter += 1
+            
+            # Save input x and target y if first batch
+            if batch_counter == 1:
                 os.makedirs(os.path.join(result_path, 'labels'), exist_ok=True)
                 x = batch_xs.detach().cpu().numpy()
                 y = batch_ys.detach().cpu().numpy()
+                psfs = batch_psfs.detach().cpu().numpy()
                 
                 #squeeze
                 x = np.squeeze(x[0,...])
@@ -213,6 +222,9 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 img = Image.fromarray((y_scaled * 255).astype(np.uint8))
                 img = img.rotate(90)  # Rotate 90 degrees counter clockwise
                 img.save(os.path.join(result_path, 'labels', f'target.png'))
+
+                sio.savemat(os.path.join(result_path, 'labels', f'psfs.mat'), 
+                           {'psfs': psfs})
                 
                 
                 
@@ -225,8 +237,8 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
 
             optimizer.step()
             
-            # Save output image every log_freq epochs
-            if  epoch % log_freq == 0 and step == 0:
+            # Save output image every log_freq batches
+            if batch_counter % log_freq == 0:
                 # Move output to CPU and convert to numpy array
                 output_np = output.detach().cpu().numpy()
                 
@@ -235,7 +247,7 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 
                 # Save output as .mat file for MATLAB
                 os.makedirs(os.path.join(result_path, 'matlab'), exist_ok=True)
-                sio.savemat(os.path.join(result_path, 'matlab', f'output_epoch_{epoch}.mat'), 
+                sio.savemat(os.path.join(result_path, 'matlab', f'output_batch_{batch_counter}.mat'), 
                            {'output': output_np})
                 
                 diff = np.abs(output_np - y)
@@ -256,26 +268,30 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 
                 # Rotate 90 degrees counter clockwise
                 output_img = np.rot90(output_img)
-                y_scaled = np.rot90(y_scaled)
-                x_scaled = np.rot90(x_scaled)
                 diff = np.rot90(diff)
                 diffx10 = np.rot90(diffx10)
                 
                 # Save as PNG using PIL
-                img = Image.fromarray(np.concatenate([x_scaled * 255, y_scaled * 255, output_img * 255, diff * 255, diffx10 * 255], axis=1).astype(np.uint8))
-                img.save(os.path.join(result_path, 'images', f'output_epoch_{epoch}.png'))
+                img = Image.fromarray(np.concatenate([np.rot90(x_scaled) * 255, np.rot90(y_scaled) * 255, output_img * 255, diff * 255, diffx10 * 255], axis=1).astype(np.uint8))
+                img.save(os.path.join(result_path, 'images', f'output_batch_{batch_counter}.png'))
 
+            # Update progress bar for each batch
+            pbar.update(1)
+            
             # Log training metrics every log_freq steps
             total_step = (epoch + epoch_offset)*len(dataset.train_loader) + step+1
             if total_step % log_freq == 0:
                 log_stats('Train', 'Train', train_loss.data.item(), train_accuracy.data.item(), total_step)
                 
-                # Update progress bar description with current metrics
-                current_lr = optimizer.param_groups[0]['lr']
-                pbar.set_description(f'LR: {current_lr:.2e} Loss: {train_loss.data.item():.4f}')
+            # Update progress bar description with current metrics
+            current_lr = optimizer.param_groups[0]['lr']
+            pbar.set_description(f'Epoch: {epoch+1}/{epochs} Batch: {batch_counter}/{total_batches} LR: {current_lr:.2e} Loss: {train_loss.data.item():.4f}')
 
         # Update LR
         lr_scheduler.step()
+
+    # Close progress bar
+    pbar.close()
 
     # Save last checkpoint
     save_path = os.path.join(checkpoint_path, 'last')
