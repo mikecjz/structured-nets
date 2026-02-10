@@ -383,7 +383,7 @@ def AhA_cartesian(x, SEs, mask, single_coil, is_complex):
     
     return AhAx
 
-def AhA_toeplitz(x, SEs, mask, single_coil, is_complex, lam = 3):
+def AhA_toeplitz(x, SEs, mask, single_coil, is_complex, lam = 0):
     """
     Compute Non Cartesian (Toeplitz) A^H A x, where A is the sensitivity encoding matrix
     
@@ -534,8 +534,8 @@ class MRIDataset(Dataset):
     
     def __getitem__(self, idx):
         """Load and process a single slice on-demand"""
-        X, Y, inverse_mask_coils = self._load_slice_data(idx)
-        return torch.from_numpy(X), torch.from_numpy(Y), torch.from_numpy(inverse_mask_coils)
+        X, Y = self._load_slice_data(idx)
+        return torch.from_numpy(X), torch.from_numpy(Y)
     
     def _load_slice_data(self, idx):
         """Load and process data for a single slice"""
@@ -561,7 +561,7 @@ class MRIDataset(Dataset):
         elif self.operator_type == 'toeplitz':
             AhAx = AhA_toeplitz(image, SEs, self.mask, self.is_single_coil, self.is_complex)
 
-        inverse_mask_coils = generate_psf(self.mask_extended, SEs)
+        # inverse_mask_coils = generate_psf(self.mask_extended, SEs)
         
         # Determine input/output based on train type
         if self.mri_train_type == 'forward':
@@ -571,10 +571,10 @@ class MRIDataset(Dataset):
             X = AhAx
             Y = image
         
-        # Add rank dimension for 2D case
-        if self.dim == 2:
-            X = np.expand_dims(X, axis=0)
-            Y = np.expand_dims(Y, axis=0)
+        # # Add rank dimension for 2D case
+        # if self.dim == 2:
+        #     X = np.expand_dims(X, axis=0)
+        #     Y = np.expand_dims(Y, axis=0)
         
-        return X, Y, inverse_mask_coils
+        return X, Y
 

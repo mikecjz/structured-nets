@@ -19,23 +19,23 @@ while [ "$#" -gt 0 ]; do
 done
 
 python pytorch/main.py \
-    --name "mri_toep" \
+    --name "mri_spiral" \
     --epochs 30 \
     --batch-size 16 \
-    --lr 3e-5 \
+    --lr 6e-5 \
     --lr-decay 0.99995 \
     --optim ams \
-    --log-freq 500 \
+    --log-freq 200 \
     --data-dir $DATA_DIR \
     --dataset mri_toep \
     --case-name file_brain_AXT1_201_6002779 \
     --slice-idx 3 \
-    --mask-type toep_mask \
+    --mask-type spiral_mask \
     --operator-type toeplitz \
     --mri-train-type $TYPE \
     model SL \
     --class-type toeplitz_symmetric \
-    --r 6 \
+    --r 16 \
     --is-complex \
     --dim 2
     

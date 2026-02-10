@@ -197,8 +197,8 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
             
         for step, data in enumerate(dataset.train_loader, 0):
             # Get the inputs
-            batch_xs, batch_ys, batch_psfs = data
-            batch_xs, batch_ys, batch_psfs = batch_xs.to(device), batch_ys.to(device), batch_psfs.to(device)
+            batch_xs, batch_ys = data
+            batch_xs, batch_ys = batch_xs.to(device), batch_ys.to(device)
             
             # Increment batch counter
             batch_counter += 1
@@ -208,7 +208,6 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 os.makedirs(os.path.join(result_path, 'labels'), exist_ok=True)
                 x = batch_xs.detach().cpu().numpy()
                 y = batch_ys.detach().cpu().numpy()
-                psfs = batch_psfs.detach().cpu().numpy()
                 
                 #squeeze
                 x = np.squeeze(x[0,...])
@@ -223,14 +222,10 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
                 img = img.rotate(90)  # Rotate 90 degrees counter clockwise
                 img.save(os.path.join(result_path, 'labels', f'target.png'))
 
-                sio.savemat(os.path.join(result_path, 'labels', f'psfs.mat'), 
-                           {'psfs': psfs})
-                
-                
                 
             optimizer.zero_grad()   # Zero the gradient buffers
 
-            output = net(batch_psfs, batch_xs)
+            output = net(batch_xs)
             train_loss, train_accuracy = dataset.loss(output, batch_ys)
             train_loss += net.loss()
             train_loss.backward()
@@ -241,9 +236,19 @@ def train_MRI(dataset, net, optimizer, lr_scheduler, epochs, log_freq, log_path,
             if batch_counter % log_freq == 0:
                 # Move output to CPU and convert to numpy array
                 output_np = output.detach().cpu().numpy()
+
+                x = batch_xs.detach().cpu().numpy()
+                y = batch_ys.detach().cpu().numpy()
                 
                 #squeeze
-                output_np = np.squeeze(output_np[0,...])
+                x = np.squeeze(x[5,...])
+                y = np.squeeze(y[5,...])
+                
+                x_scaled = np.abs(x) / np.max(np.abs(x))
+                y_scaled = np.abs(y) / np.max(np.abs(y))
+                
+                #squeeze
+                output_np = np.squeeze(output_np[5,...])
                 
                 # Save output as .mat file for MATLAB
                 os.makedirs(os.path.join(result_path, 'matlab'), exist_ok=True)
